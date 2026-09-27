@@ -33,3 +33,6 @@
 - `bilibili-next-hidden.png`：点击下一条后直接播放新视频，控件保持隐藏。
 
 均来自独立 QA 会话的真机 framebuffer，使用公开 B 站视频，没有登录账号。只做 BGRA 到 PNG 的颜色格式转换及阅读方向旋转。视频未转码、未下载到仓库。验证记录见 [横竖屏 QA](../2026-09-27-bilibili-portrait-qa.md)。
+
+
+2026-09-27 新增 `hidpilot.png` 和 `hidpilot-voice.png`，通过设备 framebuffer 当前扫描页采集，旋转为 800×340。键鼠页为真实 HID 会话界面；对话页文字由真实 LocalAI 模型返回，输入由测试工具经设备输入事件送入。没有录制、拼接或伪造语音识别对话，也不表示当前 TTS 服务已验收。摄像头拍到私人环境的预览不上传公开仓库。

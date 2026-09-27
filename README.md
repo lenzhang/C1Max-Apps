@@ -14,6 +14,7 @@ apps/
 ├── pcsx4all/       PS1 模拟器、游戏库、即时存档（自备游戏）
 ├── dosbox/         DOS 游戏库、命令行与实体键盘（解释器）
 ├── processing/     QuickJS 绘图、四个官方示例改编与物理键盘编辑
+├── hidpilot/       USB 键鼠、摄像头智能体与 LocalAI 语音对话
 ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
 ├── airtune/        Radio-Browser 网络电台目录、复古收音机界面
 ├── crosspoint/     本地电子书与 OPDS/Calibre 书目浏览
@@ -33,6 +34,8 @@ apps/
 旧的顶层 `launcher/`、`piano/`、`emu/` 已分别迁入这里，tinyalsa 合并到 `shared/`。来源是 CardputerZero 的应用保留在各自 README 中；未改写原工程。
 
 ## 新增应用
+
+- **[HIDPilot 智能体](hidpilot/README.md)**：USB HID 键鼠与 ADB / MTP 共存，触控板和实体键盘控制电脑；摄像头四角校准、可配置视觉模型、单步或最多十步操作。另有按键录音、ASR、文字／语音对话和 WAV 播报接口。真实 USB 输入、视觉定位与 ASR 已分别验证；摄像头对准显示器的完整闭环待测，当前测试服务器 TTS 有 CUDA 故障。
 
 - **[Bilibili](bilibili/README.md)**：参考 wiliwili 的接口，为本机重写轻量界面。热门、竖屏精选、搜索／BV 号、分 P、扫码登录、本机收藏和历史；优先直连 360p H.264/AAC MP4，无需自建转码服务。L 右转 90°，P/O 直接切换视频；支持暂停、跳转、音量和填宽／完整画面。未实现 DASH-only、番剧、直播和弹幕，验证范围见应用说明。
 
@@ -81,6 +84,10 @@ apps/
   <tr>
     <td><strong>Bilibili</strong><br><a href="docs/screenshots/bilibili.png"><img src="docs/screenshots/bilibili.png" alt="Bilibili 真机联网加载热门视频与三个封面" width="400"></a><br>联网热门、搜索、分 P 和扫码登录；<a href="bilibili/README.md">功能与限制</a>。</td>
     <td><strong>Bilibili 播放控制</strong><br><a href="docs/screenshots/bilibili-playback.png"><img src="docs/screenshots/bilibili-playback.png" alt="Bilibili 原始 360p 视频网络播放与控制条" width="400"></a><br>原始 360p MP4 直连播放；暂停、跳转和完整画面模式。</td>
+  </tr>
+  <tr>
+    <td><strong>HIDPilot 键鼠</strong><br><a href="docs/screenshots/hidpilot.png"><img src="docs/screenshots/hidpilot.png" alt="HIDPilot 真机触控板、实体键盘修饰键和 USB 状态" width="400"></a><br>USB HID 与 ADB 共存；<a href="hidpilot/README.md">使用说明</a>。</td>
+    <td><strong>HIDPilot 对话</strong><br><a href="docs/screenshots/hidpilot-voice.png"><img src="docs/screenshots/hidpilot-voice.png" alt="HIDPilot 真机对话页面显示模型的中文回答" width="400"></a><br>按键录音、ASR、文字对话；当前测试服务器的 TTS 故障见验证记录。</td>
   </tr>
 </table>
 

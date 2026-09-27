@@ -15,6 +15,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <tinyalsa/mixer.h>
+#include "idle_reset.h"
 
 #define VOLUME_STEP 13
 #define REPEAT_MS 150
@@ -68,12 +69,13 @@ static int adjust(struct mixer_ctl *control, int delta) {
 }
 
 int main(void) {
-    static const char *devices[] = {"/dev/input/event0", "/dev/input/event1"};
-    struct pollfd inputs[2] = {{.fd = -1}, {.fd = -1}};
+    static const char *devices[] = {"/dev/input/event0", "/dev/input/event1", "/dev/input/event2"};
+    struct pollfd inputs[3] = {{.fd = -1}, {.fd = -1}, {.fd = -1}};
     struct mixer *mixer = NULL;
     struct mixer_ctl *control;
     uint64_t last_action[2] = {0, 0};
-    int discarded[2] = {0, 0};
+    int discarded[3] = {0, 0, 0};
+    uint64_t last_idle_reset=0;
     int shift[2] = {0,0};
     int active = 0, result = 1;
     pid_t parent = getppid();
@@ -105,7 +107,7 @@ int main(void) {
             goto done;
         }
     }
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
         inputs[i].fd = open(devices[i], O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         inputs[i].events = POLLIN;
         if (inputs[i].fd < 0) {
@@ -119,16 +121,17 @@ int main(void) {
     }
     /* event0 contains the physical volume keys on this hardware. */
     if (inputs[0].fd < 0) goto done;
-    fprintf(stderr, "[volume] Listening on event0/event1; step=%d, repeat=%dms\n",
+    c1_reset_idle();last_idle_reset=milliseconds();
+    fprintf(stderr, "[volume] Listening on event0/1/2; idle notifications active; step=%d, repeat=%dms\n",
             VOLUME_STEP, REPEAT_MS);
     while (!quitting && active) {
-        int ready = poll(inputs, 2, 500);
+        int ready = poll(inputs, 3, 500);
         if (ready < 0) {
             if (errno == EINTR) continue;
             perror("[volume] poll");
             goto done;
         }
-        for (int i = 0; i < 2 && !quitting; ++i) {
+        for (int i = 0; i < 3 && !quitting; ++i) {
             if (inputs[i].fd < 0 || !inputs[i].revents) continue;
             if (inputs[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
                 fprintf(stderr, "[volume] Input device disconnected: %s\n", devices[i]);
@@ -148,6 +151,11 @@ int main(void) {
                     if (event.type == EV_SYN && event.code == SYN_REPORT) discarded[i] = 0;
                     continue;
                 }
+                if ((event.type==EV_KEY&&event.value>0) || event.type==EV_ABS) {
+                    uint64_t now=milliseconds();
+                    if(now-last_idle_reset>=1000){c1_reset_idle();last_idle_reset=now;}
+                }
+                if(i==2)continue; /* Touch only refreshes the stock idle timer. */
                 if(event.type==EV_KEY&&(event.code==KEY_LEFTSHIFT||event.code==KEY_RIGHTSHIFT)){
                     shift[event.code==KEY_RIGHTSHIFT]=event.value!=0;continue;
                 }
@@ -170,7 +178,8 @@ int main(void) {
     }
     result = quitting ? 0 : 1;
 done:
-    for (int i = 0; i < 2; ++i) if (inputs[i].fd >= 0) close(inputs[i].fd);
+    for (int i = 0; i < 3; ++i) if (inputs[i].fd >= 0) close(inputs[i].fd);
+    c1_reset_idle(); /* Restored stock UI receives a fresh idle interval. */
     if (mixer) mixer_close(mixer);
     return result;
 }

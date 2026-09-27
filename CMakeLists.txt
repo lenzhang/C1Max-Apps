@@ -113,6 +113,13 @@ add_subdirectory(.deps/xpdf-4.06 "${CMAKE_BINARY_DIR}/xpdf" EXCLUDE_FROM_ALL)
 set_target_properties(pdftotext PROPERTIES OUTPUT_NAME c1max-pdftotext RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 add_dependencies(c1max-crosspoint pdftotext)
 
+add_executable(c1max-hidpilot hidpilot/src/main.cpp hidpilot/src/agent.cpp hidpilot/src/voice.cpp hidpilot/src/usb.cpp hidpilot/src/frame_image.cpp shared/display.cpp shared/keyboard.cpp)
+target_include_directories(c1max-hidpilot PRIVATE .deps/lvgl/src/libs/tiny_ttf .deps/lvgl/src/libs/gltf/stb_image)
+target_link_libraries(c1max-hidpilot c1net lvgl m)
+add_executable(c1max-hidpilot-usb hidpilot/src/gadget.cpp)
+add_executable(c1max-hidpilot-service-test EXCLUDE_FROM_ALL hidpilot/tools/service-test.cpp hidpilot/src/agent.cpp hidpilot/src/voice.cpp)
+target_link_libraries(c1max-hidpilot-service-test c1net)
+
 # Optional applications stay local; a clean checkout builds only public apps.
 option(C1_BUILD_LOCAL_APPS "Build applications from ignored local configuration" OFF)
 if(C1_BUILD_LOCAL_APPS)

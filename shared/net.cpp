@@ -45,9 +45,9 @@ std::string resolve(const std::string&base,const std::string&p){
     return (!p.empty()&&p[0]=='/')?o+p:base+"/"+p;
 }
 struct TempDir {std::string path; TempDir(){char t[]="/tmp/c1apps-http-XXXXXX";char*p=mkdtemp(t);if(!p)throw std::runtime_error("Cannot create request directory");path=p;}~TempDir(){for(auto s:{"/config","/body","/log"})unlink((path+s).c_str());rmdir(path.c_str());}};
-Response http(const std::string&method,const std::string&url,const std::vector<std::string>&headers,const std::string&body,const std::atomic<bool>*cancel){
+Response http(const std::string&method,const std::string&url,const std::vector<std::string>&headers,const std::string&body,const std::atomic<bool>*cancel,int io_timeout_s){
     origin(url);TempDir tmp;
-    std::string cfg="check_certificate = on\nmax_redirect = 0\ntries = 1\ntimeout = 8\n";
+    std::string cfg="check_certificate = on\nmax_redirect = 0\ntries = 1\ntimeout = "+std::to_string(std::clamp(io_timeout_s,1,120))+"\n";
     for(auto &h:headers){if(h.find_first_of("\r\n")!=std::string::npos)throw std::runtime_error("Invalid HTTP header");cfg+="header = "+h+"\n";}
     save_private(tmp.path+"/config",cfg);save_private(tmp.path+"/body",body);
     int pipefd[2];if(pipe2(pipefd,O_CLOEXEC))throw std::runtime_error("Cannot open request pipe");

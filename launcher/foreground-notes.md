@@ -95,4 +95,4 @@ KILL 后回收守护器，以及 ALSA 恢复前守护器必须已退出。音量
 
 原厂 PowerManager 独立于 smartUI 运行。自定义前台停止 smartUI 后，原应用的输入活动通知也消失，原厂空闲计时可能跨应用继续累计；ADB 活动不等同于键盘／触摸活动。统一输入辅助进程现在监听 event0/1/2，通过原厂 `sys.backlight.timer.reset=1` 单次通知重置计时，最多每秒一次；进入／退出自定义前台同样重置。没有改写用户的 `sys.backlight.timer`、`sys.suspend.timer` 或全局电源锁。
 
-HIDPilot 在取景、HID 连接和语音／模型任务期间主动刷新；其他应用空闲到设置时间仍可正常息屏。PowerManager 协议与真机缩短计时测试见 [HIDPilot 验证记录](../docs/2026-09-27-hidpilot-qa.md)。
+HID 键鼠在 USB 会话期间主动刷新；MoonPilot 在串流、录音、模型请求和播报期间刷新；其他应用空闲到设置时间仍可正常息屏。PowerManager 协议与真机缩短计时测试见 [HIDPilot 验证记录](../docs/2026-09-27-hidpilot-qa.md)。

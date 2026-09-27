@@ -9,7 +9,7 @@
 #include <string>
 #include <stdexcept>
 #include <cerrno>
-namespace hidpilot {
+namespace moonpilot {
 class Process {
     pid_t pid_=-1;
 public:

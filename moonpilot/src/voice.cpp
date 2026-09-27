@@ -1,9 +1,9 @@
 #include "voice.hpp"
 #include <stdexcept>
-namespace hidpilot {
+namespace moonpilot {
 std::string transcribe(const Settings&s,const std::string&wav){
     validate_settings(s);if(wav.size()<44||wav.size()>700000||wav.compare(0,4,"RIFF")||wav.compare(8,4,"WAVE"))throw std::runtime_error("录音无效或过长");
-    const std::string boundary="----C1HIDPilotAudio25";
+    const std::string boundary="----C1MoonPilotAudio26";
     if(s.model.find_first_of("\r\n")!=std::string::npos)throw std::runtime_error("识别模型名无效");
     std::string body="--"+boundary+"\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n"+s.model+"\r\n--"+boundary+"\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\nContent-Type: audio/wav\r\n\r\n"+wav+"\r\n--"+boundary+"--\r\n";
     std::vector<std::string> headers={"Content-Type: multipart/form-data; boundary="+boundary};if(!s.token.empty())headers.push_back("Authorization: Bearer "+s.token);
@@ -19,7 +19,7 @@ std::string synthesize(const Settings&s,const std::string&text){
 }
 Json converse(const Settings&s,const std::string&utterance,const Json&history){
     validate_settings(s);if(utterance.empty()||utterance.size()>1200)throw std::runtime_error("语音内容无效");
-    Json messages=Json::array({{{"role","system"},{"content","你是 HIDPilot，一个用摄像头看屏幕、USB 键鼠控制电脑的助手。用简短自然中文回答，每次最多 100 字。当前这一调用没有图像、没有执行电脑动作，不能假装看见屏幕或完成任务。用户聊天/提问时只回答；用户明确让你操作电脑时，把目标放在 task，说明已准备好，按运行后开始。只返回 JSON：{\"reply\":\"简短回答\",\"task\":null}，或 task 为清晰的任务字符串。"}}});
+    Json messages=Json::array({{{"role","system"},{"content","你是 MoonPilot，一个通过 Moonlight 查看和操作远程电脑的助手。用简短自然中文回答，每次最多 100 字。当前这一调用没有图像、没有执行电脑动作，不能假装看见屏幕或完成任务。用户聊天/提问时只回答；用户明确让你操作电脑时，把目标放在 task，说明已准备好，按运行后开始。只返回 JSON：{\"reply\":\"简短回答\",\"task\":null}，或 task 为清晰的任务字符串。"}}});
     for(auto&m:history)messages.push_back(m);messages.push_back({{"role","user"},{"content",utterance}});
     Json body={{"model",s.model},{"messages",messages},{"max_tokens",512},{"temperature",0.3},{"stream",false},{"response_format",{{"type","json_object"}}},{"chat_template_kwargs",{{"enable_thinking",false}}}};
     std::vector<std::string> headers={"Content-Type: application/json"};if(!s.token.empty())headers.push_back("Authorization: Bearer "+s.token);

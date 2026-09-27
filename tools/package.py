@@ -3,7 +3,7 @@
 import argparse, hashlib, json, pathlib, runpy, shutil, subprocess
 from PIL import Image, ImageOps
 root=pathlib.Path(__file__).resolve().parents[1]
-ids=['launcher','piano','nes','streamplayer','calendar','calculator','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot']
+ids=['launcher','piano','nes','streamplayer','calendar','calculator','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot']
 parser=argparse.ArgumentParser()
 parser.add_argument('--local',action='store_true',help='Apply ignored config/package.local.py to the device payload')
 parser.add_argument('--source-list',type=pathlib.Path,help='NUL-separated git ls-files output from the host for container builds')
@@ -31,12 +31,12 @@ for name in ids:
             if p.suffix in ['.nes','.7z','.o']:continue
             if p.suffix == '.png' and 'assets' not in p.parts:continue
             digest.update(str(p.relative_to(root)).encode()+b'\0'+p.read_bytes())
-    if name=='hidpilot':
-        for filename in ['camera/src/frame.hpp','camera/src/stb_image_write.h']:
+    if name=='moonpilot':
+        for filename in ['camera/src/stb_image_write.h','streamplayer/src/y4m.hpp','streamplayer/src/yuv_pipe.c','crosspoint/vendor/tinyxml2/tinyxml2.cpp','crosspoint/vendor/tinyxml2/tinyxml2.h']:
             digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     for filename in ['CMakeLists.txt','dependencies.json','archives.json']:
         digest.update((root/filename).read_bytes())
-    apps.append({'id':name,'version':'0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','hidpilot'] else '0.2.0','revision':digest.hexdigest()})
+    apps.append({'id':name,'version':'0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
 catalog={'schema':1,'platform':'c1max-mipsel-linux','apps':apps}
 if not args.local:(root/'catalog.json').write_text(json.dumps(catalog,indent=2)+'\n')
 out=root/'.build/device'
@@ -86,6 +86,8 @@ shutil.copy2(root/'.build/mips/c1max-hidpilot-usb',out/'hidpilot')
 (out/'hidpilot/c1max-hidpilot-usb').chmod(0o755)
 shutil.copytree(root/'hidpilot/licenses',out/'hidpilot/licenses')
 shutil.copy2(root/'hidpilot/README.md',out/'hidpilot')
+shutil.copytree(root/'moonpilot/licenses',out/'moonpilot/licenses')
+shutil.copy2(root/'moonpilot/README.md',out/'moonpilot')
 shutil.copytree(root/'camera/licenses',out/'camera/licenses')
 shutil.copytree(root/'camera/assets',out/'camera/assets')
 shutil.copytree(tool_payload,out/'linux-tools')

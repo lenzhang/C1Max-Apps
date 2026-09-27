@@ -17,6 +17,7 @@ class Y4mReader {
     size_t received_=0;
     int width_=0,height_=0,aspect_n_=1,aspect_d_=1;
     uint64_t count_=0;
+    int max_width_=512,max_height_=288;
     int64_t pts_=std::numeric_limits<int64_t>::min();
     bool fail(const char *why){state_=Failed;error_=why;return false;}
     bool header(){
@@ -33,8 +34,8 @@ class Y4mReader {
                 else if(word[0]=='A'){auto colon=word.find(':');if(colon==std::string::npos)return fail("Invalid pixel aspect ratio");aspect_n_=std::stoi(word.substr(1,colon-1));aspect_d_=std::stoi(word.substr(colon+1));}
             }catch(...){return fail("Invalid YUV frame header");}
         }
-        if(width_<2||height_<2||width_>512||height_>288||(width_%2)||(height_%2)||!progressive||!color)
-            return fail("Expected progressive YUV420 at up to 512 x 288");
+        if(width_<2||height_<2||width_>max_width_||height_>max_height_||(width_%2)||(height_%2)||!progressive||!color)
+            return fail("Progressive YUV420 frame exceeds configured limits");
         if(aspect_n_<=0||aspect_d_<=0)aspect_n_=aspect_d_=1;
         if(aspect_n_>1000000||aspect_d_>1000000)return fail("Pixel aspect ratio out of range");
         pixels_.resize(size_t(width_)*height_*3/2);rgb_.resize(size_t(width_)*height_);
@@ -51,6 +52,7 @@ class Y4mReader {
         }
     }
 public:
+    explicit Y4mReader(int max_width=512,int max_height=288):max_width_(std::clamp(max_width,2,800)),max_height_(std::clamp(max_height,2,450)){}
     using Frame=std::function<void(const uint32_t*,int,int,int,int)>;
     bool feed(const uint8_t *data,size_t size,const Frame &frame){
         while(size&&state_!=Failed){

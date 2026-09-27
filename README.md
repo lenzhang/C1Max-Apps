@@ -14,7 +14,8 @@ apps/
 ├── pcsx4all/       PS1 模拟器、游戏库、即时存档（自备游戏）
 ├── dosbox/         DOS 游戏库、命令行与实体键盘（解释器）
 ├── processing/     QuickJS 绘图、四个官方示例改编与物理键盘编辑
-├── hidpilot/       USB 键鼠、摄像头智能体与 LocalAI 语音对话
+├── hidpilot/       USB 键鼠与触控板
+├── moonpilot/      Moonlight 远程桌面、AI 操作与语音对话
 ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
 ├── airtune/        Radio-Browser 网络电台目录、复古收音机界面
 ├── crosspoint/     本地电子书与 OPDS/Calibre 书目浏览
@@ -35,7 +36,8 @@ apps/
 
 ## 新增应用
 
-- **[HIDPilot 智能体](hidpilot/README.md)**：USB HID 键鼠与 ADB / MTP 共存，触控板和实体键盘控制电脑；摄像头四角校准、可配置视觉模型、单步或最多十步操作。另有按键录音、ASR、文字／语音对话和 WAV 播报接口。真实 USB 输入、视觉定位与 ASR 已分别验证；摄像头对准显示器的完整闭环待测，当前测试服务器 TTS 有 CUDA 故障。
+- **[HID 键鼠](hidpilot/README.md)**：USB HID 与 ADB / MTP 共存，触控板、实体键盘、修饰键和滚轮控制电脑。0.2.0 起专注手动输入。
+- **[MoonPilot AI](moonpilot/README.md)**：独立的 Moonlight / Sunshine 远程操作应用，包含手动添加主机、PIN 配对、桌面预览、模型单步／十步操作，以及可配置 ASR、对话和 TTS。配对协议回归与真机解码通过；真实 Sunshine 串流和 AI 闭环待主机接入后验证。
 
 - **[Bilibili](bilibili/README.md)**：参考 wiliwili 的接口，为本机重写轻量界面。热门、竖屏精选、搜索／BV 号、分 P、扫码登录、本机收藏和历史；优先直连 360p H.264/AAC MP4，无需自建转码服务。L 右转 90°，P/O 直接切换视频；支持暂停、跳转、音量和填宽／完整画面。未实现 DASH-only、番剧、直播和弹幕，验证范围见应用说明。
 
@@ -87,7 +89,7 @@ apps/
   </tr>
   <tr>
     <td><strong>HIDPilot 键鼠</strong><br><a href="docs/screenshots/hidpilot.png"><img src="docs/screenshots/hidpilot.png" alt="HIDPilot 真机触控板、实体键盘修饰键和 USB 状态" width="400"></a><br>USB HID 与 ADB 共存；<a href="hidpilot/README.md">使用说明</a>。</td>
-    <td><strong>HIDPilot 对话</strong><br><a href="docs/screenshots/hidpilot-voice.png"><img src="docs/screenshots/hidpilot-voice.png" alt="HIDPilot 真机对话页面显示模型的中文回答" width="400"></a><br>按键录音、ASR、文字对话；当前测试服务器的 TTS 故障见验证记录。</td>
+    <td><strong>MoonPilot AI</strong><br><a href="docs/screenshots/moonpilot-launcher.png"><img src="docs/screenshots/moonpilot-launcher.png" alt="真机专用测试菜单中的 HID 键鼠和 MoonPilot 两个独立入口" width="400"></a><br>两个独立入口的真机测试菜单；真实 Sunshine 串流待接入验证。</td>
   </tr>
 </table>
 
@@ -129,7 +131,9 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 │   ├── dosbox/{c1max-dosbox,c1max-dos-core,C1LAB.COM,licenses/}
 │   ├── processing/{c1max-processing,api.js,examples/,licenses/}
 │   ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
-├── airtune/c1max-airtune
+│   ├── hidpilot/{c1max-hidpilot,c1max-hidpilot-usb}
+│   ├── moonpilot/c1max-moonpilot
+│   ├── airtune/c1max-airtune
 │   ├── crosspoint/c1max-crosspoint
 │   ├── camera/c1max-camera
 │   ├── mail/c1max-mail
@@ -147,7 +151,9 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
     ├── dosbox/        DOS 游戏完整目录、设置与游戏存档
     ├── processing/    my-sketch.js 用户程序
     ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
-├── airtune/       本地电台列表与分类缓存
+    ├── hidpilot/      USB 运行日志与旧版私有设置
+    ├── moonpilot/     模型设置、主机配对证书（0600）
+    ├── airtune/       本地电台列表与分类缓存
     ├── crosspoint/    books/ 本地书籍、OPDS 服务器与字号设置
     ├── camera/        photos/ 拍摄照片、画幅/滤镜/相纸设置
     ├── mail/          邮箱服务器及认证信息（0600）

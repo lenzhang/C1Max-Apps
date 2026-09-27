@@ -23,7 +23,7 @@ static int output_fd = -1, checked = 0, failed = 0, width = 0, height = 0;
 static int source_width = 0, source_height = 0;
 static int aspect_n = 1, aspect_d = 1;
 static decode_function original_decode;
-static unsigned char packet[512 * 288 * 3 / 2 + 160];
+static unsigned char packet[800 * 450 * 3 / 2 + 160];
 
 static void fail(const char *reason)
 {
@@ -117,8 +117,9 @@ static void emit_frame(const AVFrame *frame)
     /* Direct 360p is opt-in. Existing Emby/Jellyfin contracts remain unchanged.
      * Scaling bounds only the IPC/display work, not the source decoder cost. */
     int scaled=getenv("C1_YUV_SCALE")!=NULL;
+    int desktop=getenv("C1_YUV_DESKTOP")!=NULL;
     if (frame->width < 2 || frame->height < 2 ||
-        (scaled ? (frame->width>960||frame->height>960||frame->width*frame->height>307200) :
+        (desktop ? (frame->width>800||frame->height>450) : scaled ? (frame->width>960||frame->height>960||frame->width*frame->height>307200) :
                   (frame->width>512||frame->height>288)) ||
         (frame->width & 1) || (frame->height & 1)) { fail("invalid_geometry"); return; }
     if (frame->interlaced_frame) { fail("interlaced"); return; }

@@ -22,5 +22,10 @@
   "mbedtls-2.28.10": {
     "url": "https://github.com/Mbed-TLS/mbedtls.git",
     "commit": "2fc8413bfcb51354c8e679141b17b3f1a5942561"
+  },
+  "moonlight-embedded": {
+    "url": "https://github.com/moonlight-stream/moonlight-embedded.git",
+    "commit": "f32e415aea6797d261d6b470dcf8bf18727341c2",
+    "submodules": true
   }
 }

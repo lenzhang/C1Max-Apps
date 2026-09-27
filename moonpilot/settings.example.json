@@ -1,0 +1,32 @@
+{
+  "vision": {
+    "endpoint": "",
+    "model": "qwen3.8-27b-uncensored-mtp-q4",
+    "token": ""
+  },
+  "chat": {
+    "endpoint": "",
+    "model": "qwen3.5-4b-claude-4.6-opus-reasoning-distilled",
+    "token": ""
+  },
+  "asr": {
+    "endpoint": "",
+    "model": "qwen3-asr-1.7b",
+    "token": ""
+  },
+  "tts": {
+    "endpoint": "",
+    "model": "faster-qwen3-tts",
+    "token": ""
+  },
+  "spoken": true,
+  "host": {
+    "address": "",
+    "port": 47989,
+    "width": 640,
+    "height": 360,
+    "fps": 15,
+    "bitrate": 1500,
+    "app_id": 0
+  }
+}

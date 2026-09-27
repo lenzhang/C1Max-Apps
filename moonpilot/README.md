@@ -4,7 +4,9 @@ C1 Max 上基于 Moonlight / Sunshine 的远程桌面智能体。通过网络接
 
 **当前为开发预览版**：配对协议测试、MIPS 构建和真机 H.264 解码通过；尚未连接用户的 Sunshine 主机，真实串流、延迟、远程输入及 AI 完整闭环仍待验证。此版本不能据此视为已完成 Moonlight 兼容性验收。
 
-![两个独立入口的真机测试菜单](../docs/screenshots/moonpilot-launcher.png)
+| Sunshine 主机设置 | 远程操作页（尚未连接主机） |
+| --- | --- |
+| ![MoonPilot 真机主机配置](../docs/screenshots/moonpilot.png) | ![MoonPilot 真机操作页](../docs/screenshots/moonpilot-desktop.png) |
 
 ## 连接电脑
 

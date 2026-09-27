@@ -85,12 +85,12 @@
     {
       "id": "hidpilot",
       "version": "0.2.0",
-      "revision": "8d2b9fc5bc245f22c79c6d41d716194c25469e3744f29e433695f81264e19a5d"
+      "revision": "800ce0c4db3cc43c5b1cca682ea4dfe20264a8ff08c9a9c7c47087077776962b"
     },
     {
       "id": "moonpilot",
       "version": "0.1.0",
-      "revision": "abc8ebcbdcefa544a0c831269603e11256df7abe85a9f56972c2eeff7a57a3b8"
+      "revision": "0419bece2552844e4742d42a2ef8960d62b89c3b3efe74a581b7858bfffdd4bc"
     }
   ]
 }

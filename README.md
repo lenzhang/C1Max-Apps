@@ -89,7 +89,7 @@ apps/
   </tr>
   <tr>
     <td><strong>HIDPilot 键鼠</strong><br><a href="docs/screenshots/hidpilot.png"><img src="docs/screenshots/hidpilot.png" alt="HIDPilot 真机触控板、实体键盘修饰键和 USB 状态" width="400"></a><br>USB HID 与 ADB 共存；<a href="hidpilot/README.md">使用说明</a>。</td>
-    <td><strong>MoonPilot AI</strong><br><a href="docs/screenshots/moonpilot-launcher.png"><img src="docs/screenshots/moonpilot-launcher.png" alt="真机专用测试菜单中的 HID 键鼠和 MoonPilot 两个独立入口" width="400"></a><br>两个独立入口的真机测试菜单；真实 Sunshine 串流待接入验证。</td>
+    <td><strong>MoonPilot AI</strong><br><a href="docs/screenshots/moonpilot.png"><img src="docs/screenshots/moonpilot.png" alt="MoonPilot 真机 Sunshine 主机配置界面" width="400"></a><br>主机设置、PIN 配对和模型接口；真实 Sunshine 串流待接入验证。</td>
   </tr>
 </table>
 

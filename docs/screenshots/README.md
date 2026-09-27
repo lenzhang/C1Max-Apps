@@ -38,4 +38,4 @@
 2026-09-27 新增 `hidpilot.png` 和 `hidpilot-voice.png`，通过设备 framebuffer 当前扫描页采集，旋转为 800×340。键鼠页为真实 HID 会话界面；对话页文字由真实 LocalAI 模型返回，输入由测试工具经设备输入事件送入。没有录制、拼接或伪造语音识别对话，也不表示当前 TTS 服务已验收。摄像头拍到私人环境的预览不上传公开仓库。
 
 
-2026-09-27 拆分 HIDPilot 后新增 `moonpilot-launcher.png`：已安装两个新应用后，从真实设备 framebuffer 采集专用的两项测试菜单，仅旋转为 800×340。它不是完整应用列表，也不是已连接 Sunshine 的截图。原 `hidpilot.png` / `hidpilot-voice.png` 保留为 0.1.0 历史界面；0.2.0 的 AI 和语音已迁入 MoonPilot。应用内新版截图因 USB 断开暂未采集。
+2026-09-27 拆分 HIDPilot 后新增 `moonpilot-launcher.png`：已安装两个新应用后，从真实设备 framebuffer 采集专用的两项测试菜单，仅旋转为 800×340。它不是完整应用列表，也不是已连接 Sunshine 的截图。连接恢复后，`hidpilot.png` 更新为 0.2.0 的真实 USB 已连接状态；新增 `moonpilot.png` 主机页、`moonpilot-desktop.png` 未连接时的操作页，均读取真机 framebuffer。`hidpilot-voice.png` 仅保留为 0.1.0 历史对话截图；AI 和语音现已迁入 MoonPilot。尚无真实 Sunshine 串流截图。

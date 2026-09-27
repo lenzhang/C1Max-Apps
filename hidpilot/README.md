@@ -11,7 +11,7 @@ C1 Max 的 USB 键盘、鼠标和触控板。0.2.0 起只负责手动输入；AI
 
 电脑无需额外控制软件，使用系统 HID 驱动。此应用不打开摄像头、不请求模型，也不会自动录音。
 
-![拆分后的两个入口（真机专用测试菜单）](../docs/screenshots/moonpilot-launcher.png)
+![HID 键鼠真机界面，USB 与 ADB 同时连接](../docs/screenshots/hidpilot.png)
 
 ## USB 实现
 

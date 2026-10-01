@@ -21,6 +21,9 @@ for name,entry in json.loads(tool_verification.read_text())['binaries'].items():
     binary=tool_payload/'bin'/name
     if not binary.is_file() or hashlib.sha256(binary.read_bytes()).hexdigest()!=entry['sha256']:
         raise SystemExit('Unverified Linux tool: '+name)
+# A CR in a shell rc/script breaks prompts and commands on the device (core.autocrlf checkouts).
+for name in ['terminal/assets/shellrc','terminal/assets/inputrc','launcher/run.sh','launcher/apps.txt']:
+    if b'\r' in (root/name).read_bytes():raise SystemExit(name+' has CRLF line endings; re-checkout with LF (see .gitattributes)')
 apps=[]
 for name in ids:
     digest=hashlib.sha256()

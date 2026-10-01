@@ -149,9 +149,9 @@ void InfoNES_LoadFrame(){
     int ny=luty[dy]; WORD* line=&wf[ny*256];
     for(int i=0;i<VP_W;i++){
       int dx=VP_X0+i;
-      WORD p=line[lutx[i]];                 // RGB565
-      uint32_t r=(p>>11)&0x1F, g=(p>>5)&0x3F, b=p&0x1F;
-      uint32_t c=0xFF000000u | ((r<<3)<<16) | ((g<<2)<<8) | (b<<3);
+      WORD p=line[lutx[i]];                 // RGB555; bit 15 marks the backdrop
+      uint32_t r=(p>>10)&0x1F, g=(p>>5)&0x1F, b=p&0x1F;
+      uint32_t c=0xFF000000u | ((r<<3|r>>2)<<16) | ((g<<3|g>>2)<<8) | (b<<3|b>>2);
       *(uint32_t*)(fbmem+base+(long)(799-dx)*fb_stride+dy*4)=c;
     }
   }
@@ -283,6 +283,9 @@ int main(int argc,char**argv){
   if(argc<2){ fprintf(stderr,"用法: %s rom.nes\n",argv[0]); return 1; }
   if(fb_init()<0) return 1;
   input_init();
+  // Builds the 6502 tables and the scanline table; without it no VBlank ever
+  // happens and every game spins in its startup wait loop on a black screen.
+  InfoNES_Init();
   fprintf(stderr,"加载 ROM: %s\n",argv[1]);
   if(InfoNES_Load(argv[1])!=0){ fprintf(stderr,"ROM加载失败\n"); return 1; }
   fprintf(stderr,"开始模拟\n");

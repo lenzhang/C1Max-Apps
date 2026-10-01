@@ -1,3 +1,5 @@
+# Device shell scripts and rc files must keep LF, even in Windows checkouts.
+* text=auto eol=lf
 
 # Preserve the pinned upstream TinyXML-2 files byte-for-byte (including CRLF).
 crosspoint/vendor/tinyxml2/tinyxml2.* -text -whitespace

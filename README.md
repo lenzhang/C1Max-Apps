@@ -130,6 +130,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 │   ├── streamplayer/c1max-streamplayer
 │   ├── calendar/c1max-calendar
 │   ├── calculator/c1max-calculator
+│   ├── settings/c1max-settings
 │   ├── terminal/{c1max-terminal,assets/}
 │   ├── linux-tools/{bin/,share/}
 │   ├── gomoku/c1max-gomoku
@@ -165,6 +166,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
     ├── mail/          邮箱服务器及认证信息（0600）
     ├── default-servers.json  单独部署的私有默认服务器（0600）
     ├── calculator/
+    ├── settings/      brightness 亮度（c1max-volume 唤醒时读取）
     └── nes/roms/      自备合法 .nes 文件
 ```
 

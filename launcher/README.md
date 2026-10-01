@@ -1,7 +1,7 @@
 # C1Max Launcher
 
 800×340 原生 framebuffer 应用入口，采用每页 4×2、最多 8 项的横向分页。
-当前清单包括 StreamPlayer、日历、计算器、钢琴、NES、应用更新和 Terminal。
+应用清单在 `apps.txt`，目前包括 StreamPlayer、日历、计算器、设置、钢琴、NES、应用更新、终端、五子棋、PCSX4all、Processing、DOSBox、Airtune、CrossPoint、拍立得、邮件、Bilibili、HID 键鼠和 MoonPilot AI。缺少 `apps.txt` 时只回退到内置的七个基础入口。
 超过 8 个应用会自动增加页面；未满的最后一页不会显示虚构应用。
 
 - 手指向左滑进入下一页，向右滑返回上一页；到达第一页或末页后不循环。

@@ -2,6 +2,7 @@
 StreamPlayer|/storage/apps/current/streamplayer/c1max-streamplayer||||streamplayer
 日历|/storage/apps/current/calendar/c1max-calendar||||calendar
 计算器|/storage/apps/current/calculator/c1max-calculator||||calculator
+设置|/storage/apps/current/settings/c1max-settings||||settings
 钢琴|/storage/apps/current/piano/c1max-piano||||piano
 NES 游戏|/storage/apps/current/streamplayer/c1max-streamplayer|--roms|||nes
 应用更新|/storage/apps/current/streamplayer/c1max-streamplayer|--updates|||updates

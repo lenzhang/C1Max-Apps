@@ -39,3 +39,13 @@
 
 
 2026-09-27 拆分 HIDPilot 后新增 `moonpilot-launcher.png`：已安装两个新应用后，从真实设备 framebuffer 采集专用的两项测试菜单，仅旋转为 800×340。它不是完整应用列表，也不是已连接 Sunshine 的截图。连接恢复后，`hidpilot.png` 更新为 0.2.0 的真实 USB 已连接状态；新增 `moonpilot.png` 主机页、`moonpilot-desktop.png` 未连接时的操作页，均读取真机 framebuffer。`hidpilot-voice.png` 仅保留为 0.1.0 历史对话截图；AI 和语音现已迁入 MoonPilot。尚无真实 Sunshine 串流截图。
+
+## 设置 0.2.0（2026-10-02）
+
+- `settings.png`：显示与熄屏页，亮度 −／+ 触摸按钮。
+- `settings-picker.png`：自动熄屏的整行选项列表，左上角「返回」按钮。
+- `settings-sound.png`：媒体音量（`softvolume`）与输出设备。
+- `settings-about.png`：本机信息首屏（型号、处理器、内存、存储）。
+- `settings-wifi-add.png`：添加隐藏网络，网络名称为测试输入，密码为测试字符，未提交连接。
+
+均为真机 framebuffer 截图，只做 BGRA 到 PNG 转换和横屏旋转。按键和触摸由设备输入事件注入。WLAN 列表和「关于」页后半部分含本机 SSID、IP、MAC 和序列号，没有收录。截图时临时改过的亮度和熄屏时间都已恢复。

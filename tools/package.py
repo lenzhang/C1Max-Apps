@@ -3,7 +3,7 @@
 import argparse, hashlib, json, pathlib, runpy, shutil, subprocess
 from PIL import Image, ImageOps
 root=pathlib.Path(__file__).resolve().parents[1]
-ids=['launcher','piano','nes','streamplayer','calendar','calculator','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot']
+ids=['launcher','piano','nes','streamplayer','calendar','calculator','settings','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot']
 parser=argparse.ArgumentParser()
 parser.add_argument('--local',action='store_true',help='Apply ignored config/package.local.py to the device payload')
 parser.add_argument('--source-list',type=pathlib.Path,help='NUL-separated git ls-files output from the host for container builds')

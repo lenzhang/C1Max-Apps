@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
 #include <time.h>
@@ -39,6 +40,32 @@ static uint64_t milliseconds(void) {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now)) return 0;
     return (uint64_t)now.tv_sec * 1000u + (uint64_t)now.tv_nsec / 1000000u;
+}
+
+/* Level chosen in Settings (1..15); full brightness when never set. */
+static int saved_backlight(void) {
+    const char *data = getenv("C1_APPS_DATA");
+    char path[160], text[8] = {0};
+    snprintf(path, sizeof(path), "%s/settings/brightness", data && *data ? data : "/storage/apps/data");
+    int fd = open(path, O_RDONLY | O_CLOEXEC), level = 15;
+    if (fd < 0) return level;
+    if (read(fd, text, sizeof(text) - 1) > 0) level = atoi(text);
+    close(fd);
+    return level >= 1 && level <= 15 ? level : 15;
+}
+
+static void wake_backlight(void) {
+    int fd = open("/sys/class/backlight/backlight/actual_brightness", O_RDONLY | O_CLOEXEC);
+    char cur[8] = {0}, level[8];
+    if (fd < 0) return;
+    ssize_t n = read(fd, cur, sizeof(cur) - 1);
+    close(fd);
+    if (n <= 0 || cur[0] != '0') return;
+    fd = open("/sys/class/backlight/backlight/brightness", O_WRONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    int len = snprintf(level, sizeof(level), "%d\n", saved_backlight());
+    if (write(fd, level, len) == len) fprintf(stderr, "[volume] backlight wake\n");
+    close(fd);
 }
 
 static long stepped(long value, int delta, int minimum, int maximum) {
@@ -154,6 +181,7 @@ int main(void) {
                 if ((event.type==EV_KEY&&event.value>0) || event.type==EV_ABS) {
                     uint64_t now=milliseconds();
                     if(now-last_idle_reset>=1000){c1_reset_idle();last_idle_reset=now;}
+                    wake_backlight();
                 }
                 if(i==2)continue; /* Touch only refreshes the stock idle timer. */
                 if(event.type==EV_KEY&&(event.code==KEY_LEFTSHIFT||event.code==KEY_RIGHTSHIFT)){

@@ -204,7 +204,7 @@ sh ./dosbox/tests/run.sh
 # 设备上执行构建生成的 c1max-api-test：清单/版本/URL 校验
 ```
 
-StreamPlayer 的 Emby 实机结果与未迁移部分见 [播放器说明](streamplayer/README.md)。日历/计算器各有独立模型测试。NES 需要自备 ROM，已加入 WASD/J/K 物理按键；尚待用户 ROM 实测兼容性。
+StreamPlayer 的 Emby 实机结果与未迁移部分见 [播放器说明](streamplayer/README.md)。日历/计算器各有独立模型测试。NES 需要自备 ROM，已加入 WASD/J/K 物理按键；2026-10-02 用自制游戏 Alter Ego（mapper 0）在真机确认标题、关卡和暂停菜单正常显示，商业 ROM 兼容性仍需用户自测。
 
 DOS 的导入与键盘说明见 [DOSBox](dosbox/README.md)。PS1 的镜像路径、按键和兼容性见 [PCSX4all](pcsx4all/README.md)，绘图语言的支持范围与示例来源见 [Processing 2D](processing/README.md)。
 

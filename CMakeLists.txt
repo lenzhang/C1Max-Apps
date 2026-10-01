@@ -2,6 +2,19 @@ cmake_minimum_required(VERSION 3.16)
 project(c1max_apps LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
+# glibc < 2.34 keeps pthread in a separate libpthread.a, and a static link
+# resolves the weak pthread references behind std::async/std::thread to null
+# (a 2026-09-28 release built with Ubuntu GCC 10 crashed at startup in
+# Bilibili). Link the whole archive there; merged glibc needs nothing.
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("#include <features.h>
+#if !__GLIBC_PREREQ(2, 34)
+#error libpthread is separate
+#endif
+int main() { return 0; }" C1_GLIBC_MERGED_PTHREAD)
+if(NOT C1_GLIBC_MERGED_PTHREAD AND CMAKE_EXE_LINKER_FLAGS MATCHES "-static")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,--whole-archive -lpthread -Wl,--no-whole-archive")
+endif()
 set(LV_BUILD_CONF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/shared/lv_conf.h" CACHE STRING "" FORCE)
 set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)

@@ -67,3 +67,5 @@
 `tox-voice.png` 是录音完成、尚未发送的真机界面；`tox-background.png` 展示开启后台后的界面，均使用两个本地回环测试身份，不含真实联系人。相机画面和实际录音没有上传。
 
 `appstore.png` 与 `appstore-detail.png` 来自真机的隔离商店配置，展示按需安装目录和首页可见性控制。测试隐藏／卸载的是独立 QA 清单中的记录，没有删除用户资料。
+
+`appstore-installed.png` 是真机从公开 GitHub Release 下载并安装 Tox 0.2.0 后的详情页，使用同一隔离商店配置；不是电脑端界面预览。

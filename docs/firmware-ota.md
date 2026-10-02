@@ -95,6 +95,30 @@ update.zip
 解开 → 把新 rootfs 镜像按本文件 §6 的方式注入 → `c1sign.py` 自签 →
 放 `/storage/update/update.zip` → 跑 `flash-run3.sh`。
 
+### tools/ota/inject-and-sign.sh 一键注入
+
+上面这条手工链已固化成脚本（目标环境：编译机 Debian，需 zip/unzip/e2fsck/
+mount/python3/openssl + 免密 sudo；**不支持 macOS**）：
+
+```
+inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
+```
+
+- 输入为原厂结构的 update.zip（`update/update000/` 元数据 + `update/update001/` 载荷）；
+- 自动在 `update001/` 里识别 ext 系列文件系统且 ≥400MiB 的 rootfs 载荷
+  （`blkid -p`，`file` 兜底；零个或多个候选都直接报错，不猜）；
+- `e2fsck -fy` 后 loop mount，按 §6 做全部注入：init.rc 五处
+  （三条 setprop、c1desktop 块、hotkey 块、otaquarantine、c1telnet）、
+  `/etc/ota-quarantine.sh`（755 root:root）、key.pub 替换（先备 `key.pub.vendorbak`，
+  已存在不覆盖）、usbconfig.sh 的 `let overtime=` 笔误修复——**全部幂等**，
+  已注入的包重跑全 SKIP；
+- `zip -1` 重组后内嵌 python 复用 `c1sign.py` 的 `sign_zip`/`verify_zip`：
+  从 c1key.pem 用 `openssl rsa -text` 提取 modulus/privateExponent 签名，
+  并交叉核对 PEM 与 v2 公钥模数一致，验签 PASS 才产出；
+- 工作目录一律 `mktemp -d`，trap 先 umount 再清理，挂载点目录只用 `rmdir`，
+  umount 失败宁可留下现场也绝不 `rm -rf` 含挂载点的目录；
+- 产物按提示 `adb push` 到 `/storage/update/update.zip` 后跑 `flash-run3.sh` 即可。
+
 ## 6. 注入版 rootfs 的标准内容（当前 p8 已包含）
 
 - init.rc：

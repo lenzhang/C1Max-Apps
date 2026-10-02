@@ -171,16 +171,16 @@ static void blit_frame(uint8_t *base){
         for(int col=0;col<340;col++)dst[col]=src[col*LW];
     }
 }
-static void fb_present(void){
+static int fb_present(void){
     struct fb_var_screeninfo v;
-    if(!fb_mem||ioctl(fb_fd,FBIOGET_VSCREENINFO,&v))return;
+    if(!fb_mem||ioctl(fb_fd,FBIOGET_VSCREENINFO,&v))return 0;
     if(v.xres!=340||v.yres!=800||v.bits_per_pixel!=32||v.yres_virtual<1600){
         /* A child can leave fbdev2 configured for a single virtual page. */
         struct fb_fix_screeninfo f;
         if(ioctl(fb_fd,FBIOGET_FSCREENINFO,&f)||f.line_length!=(unsigned)fb_stride||
-           (uint64_t)fb_saved.yres_virtual*fb_stride>f.smem_len)return;
+           (uint64_t)fb_saved.yres_virtual*fb_stride>f.smem_len)return 0;
         v=fb_saved;v.xoffset=v.yoffset=0;v.activate=FB_ACTIVATE_NOW;
-        if(ioctl(fb_fd,FBIOPUT_VSCREENINFO,&v)||ioctl(fb_fd,FBIOGET_VSCREENINFO,&v))return;
+        if(ioctl(fb_fd,FBIOPUT_VSCREENINFO,&v)||ioctl(fb_fd,FBIOGET_VSCREENINFO,&v))return 0;
     }
     int target=-1;
     for(int page=0;page<fb_nframes;page++){
@@ -192,11 +192,13 @@ static void fb_present(void){
     if(target>=0){
         blit_frame(fb_mem+(size_t)target*fb_frame_sz);__sync_synchronize();
         v.xoffset=0;v.yoffset=target*800;v.activate=FB_ACTIVATE_NOW;
-        if(ioctl(fb_fd,FBIOPAN_DISPLAY,&v))perror("[launcher] present page");
+        if(ioctl(fb_fd,FBIOPAN_DISPLAY,&v)){perror("[launcher] present page");return 0;}
+        return 1;
     }else if((uint64_t)v.yoffset*fb_stride+fb_frame_sz<=fb_map_sz){
         /* Single-page fallback: one complete redraw, never a continuous loop. */
-        blit_frame(fb_mem+(size_t)v.yoffset*fb_stride);
+        blit_frame(fb_mem+(size_t)v.yoffset*fb_stride);return 1;
     }
+    return 0;
 }
 
 static void px(int x,int y,uint32_t color){if((unsigned)x<LW&&(unsigned)y<LH)backbuf[y*LW+x]=color;}
@@ -513,6 +515,7 @@ int main(int argc,char **argv){
     key_fd=open("/dev/input/event1",O_RDONLY|O_NONBLOCK|O_CLOEXEC);
     matrix_fd=open("/dev/input/event0",O_RDONLY|O_NONBLOCK|O_CLOEXEC);drain_input();
     Gesture gesture={0};Touch touch={0};char toast[96]={0};int64_t toast_until=0;int redraw=1;
+    const char *heartbeat=getenv("C1L_HEARTBEAT");
     while(!want_quit){
         int got=poll_input(&touch,80);if(want_quit)break;
         if(key_dirty){redraw=1;key_dirty=0;}
@@ -541,7 +544,8 @@ int main(int argc,char **argv){
             }
         }
         if(toast[0]&&now>=toast_until){toast[0]=0;redraw=1;}
-        if(redraw&&!want_quit){draw_grid(toast[0]?toast:NULL);fb_present();redraw=0;}
+        if(redraw&&!want_quit){draw_grid(toast[0]?toast:NULL);int presented=fb_present();redraw=!presented;
+            if(presented&&heartbeat){FILE *f=fopen(heartbeat,"w");if(f){fprintf(f,"%d\n",(int)getpid());fclose(f);heartbeat=NULL;}else redraw=1;}}
     }
     typeface_close();
     for(int i=0;i<napps;i++)free(apps[i].icon);

@@ -134,7 +134,7 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
 - `/usr/bin/usbconfig.sh`：修复君正原厂 `let overtime=overtime-1` → `overtimer`
   （变量名笔误导致重试循环永不超时，UDC 绑定慢时 usbrecfg 永久卡死）；
 - 设备侧 `/storage/apps/data/launcher/adb.onboot` 标志 → desktop-service.sh 在 smartUI
-  稳定后执行 `enable_adb.sh true`（防休眠+兜底）。
+  稳定后执行 `enable_adb.sh true`（兜底），并按用户偏好重放息屏策略（见 §7「息屏/睡眠策略」）。
 
 ## 7. 调试通道与已知陷阱（每条都踩过）
 
@@ -146,7 +146,20 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
   无线通道 = `nc 192.168.4.142 2323`（telnetd，root shell，无认证——限家庭内网调试用）；
 - gadget 配置读取的是 `user.usb.config`；`sys.usb.state=adb` 触发 `start adbd; start mtp`
   （adb 模式下是 adb+mtp 复合）；
-- 设备真休眠会令 USB gadget 下电（表现为 adb 掉线）——`sys.backlight.lock=1` 已抑制。
+- 设备真休眠会令 USB gadget 下电（表现为 adb 掉线）——开机默认 `sys.backlight.lock=1`
+  已抑制；若用户在设置里自选熄屏超时，息屏/休眠按原厂计时发生（见下「息屏/睡眠策略」）。
+
+**息屏/睡眠策略（持久化，2026-10-02 起）**
+- 归属：息屏策略是**用户偏好**，设置应用「自动熄屏」拥有并修改它；`adb.onboot`
+  只是调试便利总开关（开机 ADB），不再强制屏幕常亮；
+- 链路：init.rc `on init` 先给 `sys.backlight.lock=1`（早期默认，防真休眠）→
+  smartUI 稳定后 desktop-service.sh 读 `/storage/apps/data/settings/screenoff`
+  逐行重放 `lock`/`timer`（缺行跳过该项），最后 `setprop sys.backlight.timer.reset 1`；
+  文件不存在 = 调试默认 `lock=1`（屏幕常亮）；
+- 文件格式（设置应用写入）：`lock=<0|1>` 与 `timer=<ms>` 两行；「永不」=
+  `lock=1` + `timer=0`，超时档 = `lock=0` + 对应毫秒；
+- 设置应用回显以该文件为准，文件不存在才按当前属性推断；
+- 三个 `sys.backlight.*` 属性本身仍是非持久的，重启即丢，持久层只有这个文件。
 
 **原厂隐藏机制**
 - 「关于」页连点「系统版本」≥10 次/5 秒 → 弹 toast 并向

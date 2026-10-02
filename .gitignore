@@ -16,13 +16,15 @@ data/
 *.key
 config/*.local.json
 
-# Private application and its source, tests, artwork and verification records.
-/tox/
-/tests/tox/
-/docs/*-tox-*.md
+# Tox runtime identities, chat history and pre-publication local archives.
+/tox/local-integration-backup/
+**/profile.tox*
+**/chat-*.json
+**/requests.json
+**/my-id.txt
+**/session.lock
+/docs/2026-09-25-tox-qa.md
 /docs/previews/tox-*
-/docs/screenshots/tox*.png
-/launcher/assets/icons/tox.png
 /launcher/assets/tox-prompt.json
 
 # Optional local build/package extensions (never published).

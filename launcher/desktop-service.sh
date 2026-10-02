@@ -61,6 +61,8 @@ if [ -f "$STATE/adb.onboot" ]; then
     log 'adb.onboot present; enabling ADB'
     setprop service.adb.tcp.port 5555 || true
     /usr/bin/enable_adb.sh true || true
+    setprop sys.backlight.lock 1 || true
+    setprop sys.backlight.timer.reset 1 || true
 fi
 
 rm -f "$HEARTBEAT"

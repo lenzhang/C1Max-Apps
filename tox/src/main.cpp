@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "engine.hpp"
+#include "session.hpp"
+#include "media.hpp"
+#include <ctime>
 #include "qr.hpp"
 #include "scanner.hpp"
 #include "src/misc/cache/instance/lv_image_cache.h"
@@ -18,9 +21,13 @@ namespace {
 constexpr uint32_t bg=0x111b24, surface=0x1b2a35, raised=0x263945, ink=0xe6eee9, muted=0x9badae, accent=0x9bddbd, amber=0xf0c685;
 constexpr uint32_t nav_profile=0x20001,nav_add=0x20002,nav_requests=0x20003,nav_scan=0x20004,nav_zoom1=0x20010,nav_zoom15=0x20011,nav_zoom2=0x20012;
 lv_font_t*font=nullptr;
-std::unique_ptr<chat::Engine>engine;
+std::unique_ptr<chat::Session>engine;
+std::unique_ptr<chat::Media>media;
+lv_image_dsc_t media_descriptor{};lv_obj_t*media_image=nullptr;
+size_t file_index=0;
+constexpr uint32_t nav_background=0x20100,nav_photo=0x20101,nav_voice=0x20102,nav_files=0x20103,nav_capture=0x20104,nav_play=0x20105,nav_retry=0x20106,nav_file_row=0x21000;
 chat::Snapshot view;
-enum class Page { Friends, Chat, Add, Profile, Rename, Requests, Delete, Scan };
+enum class Page { Friends, Chat, Add, Profile, Rename, Requests, Delete, Scan, Files, Photo, Voice, Attachment };
 Page page=Page::Friends,scan_origin=Page::Friends;
 std::unique_ptr<chat::Scanner>scanner;
 chat::ScanView scan_view;
@@ -35,7 +42,7 @@ size_t request_index=0;
 unsigned history_offset=0;
 std::map<uint32_t,std::string>drafts;
 std::string edit,notice;
-uint64_t token=0,pending=0;
+uint64_t token=uint64_t(time(nullptr))*100000+getpid()%100000,pending=0;
 uint64_t dismissed_error=0;
 chat::Action pending_action=chat::Action::Read;
 volatile sig_atomic_t stopped=0;
@@ -52,12 +59,14 @@ void button(const char*t,int x,int y,int w,uint32_t k,bool active=false){
 }
 const chat::Friend*friend_now(){for(auto&f:view.friends)if(f.number==selected)return &f;return nullptr;}
 std::string tail(const std::string&s,size_t bytes){if(s.size()<=bytes)return s;size_t at=s.size()-bytes;while(at<s.size()&&(static_cast<unsigned char>(s[at])&0xc0)==0x80)at++;return "…"+s.substr(at);}
+std::string transfer_status(const std::string&s){if(s=="complete")return "已传输";if(s=="cancelled")return "已取消";if(s=="failed")return "失败";if(s=="waiting")return "等待接受";if(s=="receiving")return "接收中";return "未完成";}
 void erase_utf8(std::string&s){if(s.empty())return;size_t n=s.size()-1;while(n>0&&(static_cast<unsigned char>(s[n])&0xc0)==0x80)n--;s.erase(n);}
 void submit(chat::Command c){if(pending)return;c.token=++token;pending=c.token;pending_action=c.action;if(!engine->submit(c)){pending=0;notice="操作队列繁忙，请稍后再试";}}
 void open_chat(uint32_t n){if(pending)return;selected=n;page=Page::Chat;history_offset=0;engine->submit({chat::Action::Read,n});view=engine->snapshot(selected);paint();}
 void image_source(lv_obj_t*o,lv_image_dsc_t&d,const std::vector<uint32_t>&pixels,unsigned w,unsigned h){
     lv_image_cache_drop(&d);d={};d.header.magic=LV_IMAGE_HEADER_MAGIC;d.header.cf=LV_COLOR_FORMAT_ARGB8888;d.header.w=w;d.header.h=h;d.header.stride=w*4;d.data_size=pixels.size()*4;d.data=reinterpret_cast<const uint8_t*>(pixels.data());lv_image_set_src(o,&d);lv_obj_invalidate(o);
 }
+void stop_media(){media.reset();media_image=nullptr;lv_image_cache_drop(&media_descriptor);}
 void stop_scan(){scanner.reset();scan_image=nullptr;scan_status=nullptr;scan_focus=nullptr;}
 void start_scan(){
     if(!view.ready||view.id.empty()){notice="身份正在加载，请稍后再试";paint();return;}
@@ -80,9 +89,10 @@ void sidebar(){
     button("A 添加",24,257,84,nav_add);button("R 请求",116,257,94,nav_requests);
 }
 void paint(){
-    auto*r=lv_screen_active();lv_obj_clean(r);scan_image=nullptr;scan_status=nullptr;scan_focus=nullptr;lv_obj_remove_flag(r,LV_OBJ_FLAG_SCROLLABLE);lv_obj_set_style_bg_color(r,lv_color_hex(bg),0);lv_obj_set_style_text_font(r,font?font:LV_FONT_DEFAULT,0);
-    label(r,"TOX",20,9,66,28,accent);label(r,view.name,90,10,243,24);
-    label(r,view.status,350,10,250,24,view.online?accent:muted);
+    auto*r=lv_screen_active();lv_obj_clean(r);media_image=nullptr;scan_image=nullptr;scan_status=nullptr;scan_focus=nullptr;lv_obj_remove_flag(r,LV_OBJ_FLAG_SCROLLABLE);lv_obj_set_style_bg_color(r,lv_color_hex(bg),0);lv_obj_set_style_text_font(r,font?font:LV_FONT_DEFAULT,0);
+    label(r,"TOX",20,9,66,28,accent);label(r,view.name,90,10,182,24);
+    label(r,view.status,278,10,225,24,view.online?accent:muted);
+    button(view.background?"后台：开":"后台：关",509,4,147,nav_background,view.background);
     button("我的 ID",668,4,118,nav_profile);
     std::string footer;
     if(page==Page::Friends||page==Page::Chat){
@@ -94,8 +104,9 @@ void paint(){
             label(r,"好友请求  "+std::to_string(view.requests.size()),256,220,240,25,muted);button("扫码添加",594,243,172,nav_scan);
             footer="W/S 选好友  ·  回车聊天  ·  I 我的 ID  ·  电源返回菜单";
         }else{
-            label(r,f->name,250,59,330,25,accent);label(r,f->online?"在线":"离线",703,59,70,25,f->online?accent:muted);
-            button("↑",594,52,44,LV_KEY_UP);button("↓",645,52,44,LV_KEY_DOWN);
+            label(r,f->name+(f->online?" · 在线":" · 离线"),250,59,188,25,accent);
+            button("↑",438,52,43,LV_KEY_UP);button("↓",488,52,43,LV_KEY_DOWN);
+            button("附件",541,52,71,nav_files);button("拍照",620,52,71,nav_photo);button("语音",699,52,77,nav_voice);
             // A bounded, scrollable LVGL history avoids allocating a widget for
             // every stored message. At most six messages are rendered at once.
             auto*history=box(245,88,532,154,surface);lv_obj_add_flag(history,LV_OBJ_FLAG_SCROLLABLE);lv_obj_set_scroll_dir(history,LV_DIR_VER);
@@ -104,13 +115,43 @@ void paint(){
             if(!end)label(history,"还没有消息，输入第一句话吧。",10,40,506,50,muted);
             for(size_t i=begin;i<end;i++){
                 auto&m=view.messages[i];std::string prefix=m.mine?"我":"好友";
-                if(m.mine)prefix+=m.state=="delivered"?" · 已送达":m.state=="sent"?" · 已发出":" · 未确认";
-                auto*o=lv_label_create(history);lv_label_set_text(o,(prefix+"\n"+m.text).c_str());lv_label_set_long_mode(o,LV_LABEL_LONG_MODE_WRAP);lv_obj_set_pos(o,10,y);lv_obj_set_width(o,505);lv_obj_set_style_text_font(o,font?font:LV_FONT_DEFAULT,0);lv_obj_set_style_text_color(o,lv_color_hex(m.mine?accent:ink),0);lv_obj_update_layout(o);y+=lv_obj_get_height(o)+14;
+                if(!m.file.empty())prefix+=" · "+transfer_status(m.state);
+                else if(m.mine)prefix+=m.state=="delivered"?" · 已送达":m.state=="sent"?" · 已发出":" · 未确认";
+                auto*o=lv_label_create(history);lv_label_set_text(o,(prefix+"\n"+m.text+(m.file.empty()?"":"  [点右上附件查看]")).c_str());lv_label_set_long_mode(o,LV_LABEL_LONG_MODE_WRAP);lv_obj_set_pos(o,10,y);lv_obj_set_width(o,505);lv_obj_set_style_text_font(o,font?font:LV_FONT_DEFAULT,0);lv_obj_set_style_text_color(o,lv_color_hex(m.mine?accent:ink),0);lv_obj_update_layout(o);y+=lv_obj_get_height(o)+14;
             }
             lv_obj_update_layout(history);if(!history_offset)lv_obj_scroll_to_y(history,lv_obj_get_scroll_bottom(history),LV_ANIM_OFF);
             box(245,251,428,39,raised);label(r,drafts[selected].empty()?"输入文字…":tail(drafts[selected],92)+"_",257,259,401,26,drafts[selected].empty()?muted:ink);button(pending?"发送中":"发送",684,252,92,LV_KEY_ENTER,true);
-            footer="回车发送  ·  滑动查看历史  ·  返回键选好友  ·  电源返回菜单";
+            footer="回车发文字  ·  拍摄键拍照  ·  点语音录音  ·  附件查看 / 接收";
         }
+    }else if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){
+        box(12,48,776,252);box(24,61,490,225,0x090f13);
+        if(media){
+            if(!media->pixels.empty()){media_image=lv_image_create(r);lv_obj_set_pos(media_image,24+(490-media->width)/2,61+(225-media->height)/2);image_source(media_image,media_descriptor,media->pixels,media->width,media->height);}
+            else label(r,media->recording?"●  正在录音\n"+std::to_string(media->seconds)+" / 30 秒":media->kind=="voice"?"语音消息\n点试听后可暂停":"等待相机画面…",92,127,380,83,media->recording?amber:ink);
+            label(r,media->status,532,62,236,72,muted);
+            if(media->camera)button("拍摄 / 空格",534,143,234,nav_capture,true);
+            else if(media->recording)button("结束录音",534,143,234,nav_capture,true);
+            else if(media->ready){
+                if(media->kind=="voice")button(media->playing?"停止试听":"试听语音",534,139,234,nav_play);
+                if(page!=Page::Attachment)button(pending?"正在发送":"确认发送",534,182,234,LV_KEY_ENTER,true);
+            }
+            if(page!=Page::Attachment&&!media->recording&&!media->camera)button("重新拍摄 / 录音",534,224,234,nav_retry);
+            button("返回",534,265,234,screen::KEY_EXIT);
+        }
+        footer=page==Page::Attachment?"回车播放 / 暂停语音  ·  返回到附件":"拍好或录完后，按确认发送才会传给好友";
+    }else if(page==Page::Files){
+        box(12,48,776,252);label(r,"照片与语音 · W/S 选择，回车查看 / 接受",28,58,740,26,accent);
+        size_t total=view.transfers.size();for(auto&m:view.messages)if(!m.file.empty())total++;
+        if(total)file_index=std::min(file_index,total-1);else file_index=0;
+        size_t start=file_index/4*4;int y=92;
+        for(size_t i=start;i<total&&i<start+4;i++){
+            std::string title;
+            if(i<view.transfers.size()){auto&t=view.transfers[i];title=(t.mine?"发送 ":"接收 ")+t.name+" · "+(t.state=="offered"?"等待接受":t.state=="waiting"?"等待对方接受":std::to_string(t.done*100/t.size)+"%");}
+            else{size_t index=i-view.transfers.size();for(auto it=view.messages.rbegin();it!=view.messages.rend();++it)if(!it->file.empty()){if(index--==0){title=(it->mine?"我：":"好友：")+it->text+" · "+transfer_status(it->state);break;}}}
+            button(title.c_str(),27,y,746,nav_file_row+uint32_t(i),i==file_index);y+=43;
+        }
+        if(!total)label(r,"还没有附件。聊天页可以拍照、录音发送。",30,146,725,60,muted);
+        footer="回车查看 / 接受  ·  退格拒绝待接收附件或取消传输  ·  返回聊天";
     }else if(page==Page::Profile){
         box(12,48,776,252);
         if(qr_id!=view.id){lv_image_cache_drop(&qr_descriptor);own_qr=chat::make_tox_qr(view.id);qr_id=view.id;}
@@ -154,9 +195,38 @@ void key(uint32_t k){
     dismissed_error=view.error_count;
     if(k==screen::KEY_HOME){screen::quit=true;return;}
     if(k==screen::KEY_MODE)return;
-    if(k==screen::KEY_EXIT){if(pending)return;if(page==Page::Scan){stop_scan();page=scan_origin;}else page=Page::Friends;notice.clear();paint();return;}
+    if(k==screen::KEY_EXIT){if(pending)return;if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){bool attachment=page==Page::Attachment;stop_media();page=attachment?Page::Files:Page::Chat;}else if(page==Page::Files){page=Page::Chat;}else if(page==Page::Scan){stop_scan();page=scan_origin;}else page=Page::Friends;notice.clear();paint();return;}
     if(pending)return;
     notice.clear();
+    if(k==nav_background){submit({chat::Action::Background,0,view.background?"0":"1"});paint();return;}
+    try {
+        if((k==nav_photo||k==nav_voice||(k==screen::KEY_SYMBOL&&page==Page::Chat))&&friend_now()){
+            stop_scan();stop_media();media=std::make_unique<chat::Media>(c1::data()+"/tox/media");
+            if(k==nav_voice){page=Page::Voice;media->record();}else{page=Page::Photo;media->open_camera();}paint();return;
+        }
+        if(k==nav_files&&page==Page::Chat){page=Page::Files;file_index=0;paint();return;}
+        if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){
+            if(!media)return;
+            if(k==nav_retry){if(page==Page::Photo)media->open_camera();else media->record();}
+            else if(k==nav_play||(page==Page::Attachment&&k==LV_KEY_ENTER))media->play();
+            else if(k==nav_capture||k==screen::KEY_SYMBOL||k==' '||k==LV_KEY_ENTER){
+                if(media->camera)media->capture();else if(media->recording)media->finish_record();
+                else if(media->ready&&page!=Page::Attachment&&k==LV_KEY_ENTER){media->keep();submit({chat::Action::SendFile,selected,media->file});}
+            }paint();return;
+        }
+        if(page==Page::Files){
+            size_t total=view.transfers.size();for(auto&m:view.messages)if(!m.file.empty())total++;
+            if(k>=nav_file_row&&k<nav_file_row+128){file_index=k-nav_file_row;k=LV_KEY_ENTER;}
+            if(total){file_index=std::min(file_index,total-1);
+                if(k=='w'||k=='W'||k==LV_KEY_UP)file_index=(file_index+total-1)%total;
+                else if(k=='s'||k=='S'||k==LV_KEY_DOWN)file_index=(file_index+1)%total;
+                else if(file_index<view.transfers.size()){auto&t=view.transfers[file_index];
+                    if(k==LV_KEY_BACKSPACE)submit({chat::Action::CancelFile,selected,std::to_string(t.id)});
+                    else if(k==LV_KEY_ENTER&&!t.mine&&t.state=="offered")submit({chat::Action::AcceptFile,selected,std::to_string(t.id)});
+                }else if(k==LV_KEY_ENTER){size_t index=file_index-view.transfers.size();for(auto it=view.messages.rbegin();it!=view.messages.rend();++it)if(!it->file.empty()&&index--==0){stop_media();media=std::make_unique<chat::Media>(c1::data()+"/tox/media");media->load(it->file,it->kind);page=Page::Attachment;break;}}
+            }paint();return;
+        }
+    }catch(const std::exception&e){notice=e.what();paint();return;}
     if(k==nav_scan||(k==screen::KEY_SYMBOL&&(page==Page::Friends||page==Page::Add||page==Page::Profile))){start_scan();return;}
     if(page==Page::Scan&&scanner){
         if(k==nav_zoom1||k==nav_zoom15||k==nav_zoom2||k=='z'||k=='Z'){
@@ -206,18 +276,22 @@ void key(uint32_t k){
     }paint();
 }
 }
-int main(){
+int main(int argc,char**argv){
+    if(argc==3&&std::string(argv[1])=="--stop-service")return chat::stop_service(argv[2])?0:1;
+    if(argc==4&&std::string(argv[1])=="--service")return chat::run_service(argv[2],argv[3]);
     signal(SIGTERM,stop_signal);signal(SIGINT,stop_signal);
     if(!screen::open())return 1;
     font=lv_tiny_ttf_create_file(("A:"+c1::root()+"/shared/NotoSansSC-Regular.ttf").c_str(),18);
     std::string nodes=c1::root()+"/tox/bootstrap.json";if(access((c1::data()+"/tox/bootstrap.json").c_str(),R_OK)==0)nodes=c1::data()+"/tox/bootstrap.json";
-    engine=std::make_unique<chat::Engine>(c1::data()+"/tox",nodes);paint();uint32_t last=0;
+    engine=std::make_unique<chat::Session>(c1::data()+"/tox",nodes,"/proc/self/exe");paint();uint32_t last=0;
     while(!stopped&&!screen::quit){
         lv_timer_handler();for(uint32_t k;(k=screen::take_key());)key(k);
         if(screen::tick()-last>=100){last=screen::tick();auto next=engine->snapshot(selected);bool dirty=next.revision!=view.revision;view=std::move(next);
             if(selected==UINT32_MAX&&!view.friends.empty())selected=view.friends.front().number;
             if(pending&&view.completed==pending){pending=0;dirty=true;if(view.command_ok){
                 if(pending_action==chat::Action::Send){drafts[selected].clear();history_offset=0;}
+                else if(pending_action==chat::Action::SendFile){stop_media();page=Page::Files;file_index=0;notice="附件请求已发送，等待对方接受";}
+                else if(pending_action==chat::Action::Background){notice=view.background?"已开启后台：退出后继续收信；重启后需打开一次 Tox":"已关闭后台：退出后停止收信";}
                 else if(pending_action==chat::Action::Rename)page=Page::Profile;
                 else if(pending_action==chat::Action::Add){page=Page::Friends;notice="好友请求已提交，等待对方接受";}
                 else if(pending_action==chat::Action::Delete){drafts.erase(selected);selected=UINT32_MAX;page=Page::Friends;}
@@ -239,8 +313,12 @@ int main(){
                     }else dirty=true;
                 }
             }
+            if(media){try{auto old_seconds=media->seconds;bool was_recording=media->recording,was_ready=media->ready;media->poll();
+                if(was_recording!=media->recording||old_seconds!=media->seconds||was_ready!=media->ready)dirty=true;
+                if(media->camera&&!media->pixels.empty()){if(media_image)image_source(media_image,media_descriptor,media->pixels,media->width,media->height);else dirty=true;}
+            }catch(const std::exception&e){notice=e.what();dirty=true;}}
             if(dirty)paint();
         }usleep(10000);
     }
-    stop_scan();engine.reset();lv_image_cache_drop(&qr_descriptor);lv_image_cache_drop(&scan_descriptor);lv_obj_clean(lv_screen_active());lv_obj_set_style_text_font(lv_screen_active(),LV_FONT_DEFAULT,0);if(font)lv_tiny_ttf_destroy(font);screen::close();return 0;
+    stop_scan();stop_media();engine.reset();lv_image_cache_drop(&qr_descriptor);lv_image_cache_drop(&scan_descriptor);lv_obj_clean(lv_screen_active());lv_obj_set_style_text_font(lv_screen_active(),LV_FONT_DEFAULT,0);if(font)lv_tiny_ttf_destroy(font);screen::close();return 0;
 }

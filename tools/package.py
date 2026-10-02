@@ -3,7 +3,7 @@
 import argparse, hashlib, json, pathlib, runpy, shutil, subprocess
 from PIL import Image, ImageOps
 root=pathlib.Path(__file__).resolve().parents[1]
-ids=['launcher','piano','nes','streamplayer','calendar','calculator','settings','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot','tox']
+ids=['launcher','piano','nes','streamplayer','calendar','calculator','settings','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot','tox','appstore']
 parser=argparse.ArgumentParser()
 parser.add_argument('--local',action='store_true',help='Apply ignored config/package.local.py to the device payload')
 parser.add_argument('--source-list',type=pathlib.Path,help='NUL-separated git ls-files output from the host for container builds')
@@ -34,12 +34,15 @@ for name in ids:
             if p.suffix in ['.nes','.7z','.o']:continue
             if p.suffix == '.png' and 'assets' not in p.parts:continue
             digest.update(str(p.relative_to(root)).encode()+b'\0'+p.read_bytes())
+    if name=='tox':
+        for filename in ['camera/src/frame.hpp','camera/src/album.cpp','camera/src/album.hpp','camera/src/stb_image_write.h','moonpilot/src/process.hpp']:
+            digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     if name=='moonpilot':
         for filename in ['camera/src/stb_image_write.h','streamplayer/src/y4m.hpp','streamplayer/src/yuv_pipe.c','crosspoint/vendor/tinyxml2/tinyxml2.cpp','crosspoint/vendor/tinyxml2/tinyxml2.h']:
             digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     for filename in ['CMakeLists.txt','dependencies.json','archives.json']:
         digest.update((root/filename).read_bytes())
-    apps.append({'id':name,'version':'0.1.3' if name=='tox' else '0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
+    apps.append({'id':name,'version':'0.2.0' if name=='tox' else '0.1.0' if name=='appstore' else '0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
 catalog={'schema':1,'platform':'c1max-mipsel-linux','apps':apps}
 if not args.local:(root/'catalog.json').write_text(json.dumps(catalog,indent=2)+'\n')
 out=root/'.build/device'
@@ -53,6 +56,7 @@ for name in ['run.sh','apps.txt','desktop-service.sh']:
     shutil.copy2(root/'launcher'/name,out/'launcher'/name)
     if name.endswith('.sh'):(out/'launcher'/name).chmod(0o755)
 shutil.copytree(root/'launcher/licenses',out/'launcher/licenses')
+shutil.copy2(root/'.build/mips/c1max-streamplayer',out/'nes/c1max-nes-browser')
 shutil.copy2(root/'.build/mips/c1max-yuv-pipe.so',out/'streamplayer')
 (out/'streamplayer/licenses').mkdir()
 shutil.copy2(root/'streamplayer/vendor/ffmpeg42/COPYING.LGPLv2.1',out/'streamplayer/licenses/FFmpeg-LGPL-2.1.txt')
@@ -93,6 +97,9 @@ shutil.copy2(root/'hidpilot/README.md',out/'hidpilot')
 shutil.copytree(root/'moonpilot/licenses',out/'moonpilot/licenses')
 shutil.copy2(root/'moonpilot/README.md',out/'moonpilot')
 shutil.copytree(root/'tox/licenses',out/'tox/licenses')
+shutil.copy2(root/'appstore/README.md',out/'appstore')
+(out/'appstore/licenses').mkdir()
+shutil.copy2(root/'.deps/mbedtls-2.28.10/LICENSE',out/'appstore/licenses/MbedTLS-Apache-2.0.txt')
 for name in ['bootstrap.json','README.md']:
     shutil.copy2(root/'tox'/name,out/'tox'/name)
 shutil.copytree(root/'camera/licenses',out/'camera/licenses')

@@ -46,7 +46,7 @@ std::string clean_text(const std::string&s,size_t cap){
 Engine::Engine(std::string directory,std::string nodes):directory_(std::move(directory)),nodes_(std::move(nodes)){worker_=std::thread(&Engine::run,this);}
 Engine::~Engine(){stop_=true;if(worker_.joinable())worker_.join();}
 bool Engine::submit(Command c){std::lock_guard<std::mutex> lock(mutex_);if(!state_.ready||commands_.size()>=16||c.text.size()>4096||c.extra.size()>256)return false;commands_.push_back(std::move(c));return true;}
-Snapshot Engine::snapshot(uint32_t n){std::lock_guard<std::mutex> lock(mutex_);auto s=state_;auto it=history_.find(n);if(it!=history_.end())s.messages=it->second;return s;}
+Snapshot Engine::snapshot(uint32_t n){std::lock_guard<std::mutex> lock(mutex_);auto s=state_;auto it=history_.find(n);if(it!=history_.end())s.messages=it->second;for(auto&[id,t]:transfers_)if(n==UINT32_MAX||t.view.number==n)s.transfers.push_back(t.view);return s;}
 void Engine::error(const std::string&e){state_.error=clean_text(e,180);state_.error_count++;state_.revision++;}
 void Engine::publish(){
     auto connection=tox_self_get_connection_status(tox_);bool online=connection!=TOX_CONNECTION_NONE;
@@ -62,7 +62,7 @@ void Engine::refresh_friends(){
         for(auto&old:state_.friends)if(old.key==f.key)f.unread=old.unread;
         if(!history_.count(n)){
             std::vector<Message> list;
-            try{auto j=Json::parse(c1::read_file(directory_+"/chat-"+f.key+".json",256*1024));if(!j.is_array()||j.size()>max_history)throw std::runtime_error("Invalid chat history");for(auto&m:j){Message v;v.text=clean_text(m.at("text").get<std::string>(),max_message);v.mine=m.at("mine").get<bool>();v.state=m.value("state","");if(v.state!="delivered"&&v.state!="received")v.state="unconfirmed";list.push_back(std::move(v));}}catch(...){}
+            try{auto j=Json::parse(c1::read_file(directory_+"/chat-"+f.key+".json",256*1024));if(!j.is_array()||j.size()>max_history)throw std::runtime_error("Invalid chat history");for(auto&m:j){Message v;v.text=clean_text(m.at("text").get<std::string>(),max_message);v.mine=m.at("mine").get<bool>();v.state=m.value("state","");v.file=m.value("file",std::string());v.kind=m.value("kind",std::string());v.size=m.value("size",uint64_t(0));if(v.file.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos||v.file.find("..")!=std::string::npos){v.file.clear();v.kind.clear();}if(v.state!="delivered"&&v.state!="received"&&v.state!="complete"&&v.state!="cancelled"&&v.state!="failed")v.state="unconfirmed";list.push_back(std::move(v));}}catch(...){}
             history_[n]=std::move(list);
         }next.push_back(std::move(f));
     }state_.friends=std::move(next);state_.revision++;
@@ -81,7 +81,7 @@ void Engine::save_requests(){Json j=Json::array();for(auto&r:state_.requests)j.p
 void Engine::save_history(uint32_t n){
     auto f=std::find_if(state_.friends.begin(),state_.friends.end(),[n](const Friend&f){return f.number==n;});if(f==state_.friends.end())return;
     auto&list=history_[n];if(list.size()>max_history)list.erase(list.begin(),list.end()-max_history);
-    Json j=Json::array();for(auto&m:list)j.push_back({{"text",m.text},{"mine",m.mine},{"state",m.state}});
+    Json j=Json::array();for(auto&m:list)j.push_back({{"text",m.text},{"mine",m.mine},{"state",m.state},{"file",m.file},{"kind",m.kind},{"size",m.size}});
     c1::save_private(directory_+"/chat-"+f->key+".json",j.dump());
 }
 void Engine::receive_request(const uint8_t*k,const uint8_t*m,size_t n){
@@ -102,6 +102,8 @@ void Engine::on_message(Tox*,uint32_t n,Tox_Message_Type,const uint8_t*m,size_t 
 void Engine::on_receipt(Tox*,uint32_t n,uint32_t r,void*p){auto&e=*static_cast<Engine*>(p);try{e.receipt(n,r);}catch(const std::exception&x){e.error(x.what());}}
 void Engine::execute(const Command&c){
     state_.error.clear();state_.revision++;
+    if(c.action==Action::Background){c1::save_private(directory_+"/preferences.json",Json{{"background",c.text=="1"}}.dump());state_.background=c.text=="1";return;}
+    if(c.action==Action::SendFile||c.action==Action::AcceptFile||c.action==Action::CancelFile){execute_file(c);return;}
     if(c.action==Action::Bootstrap){uint8_t key[TOX_PUBLIC_KEY_SIZE];if(!unhex(c.extra,key,sizeof key)||c.text.empty()||!c.port)throw std::runtime_error("Invalid bootstrap node");if(!tox_bootstrap(tox_,c.text.c_str(),c.port,key,nullptr))throw std::runtime_error("Bootstrap failed");return;}
     if(c.action==Action::Rename){auto name=clean_text(c.text,64);if(name.empty())throw std::runtime_error("Name cannot be empty");if(!tox_self_set_name(tox_,reinterpret_cast<const uint8_t*>(name.data()),name.size(),nullptr))throw std::runtime_error("Cannot set name");state_.name=name;dirty_=true;save();return;}
     if(c.action==Action::Add||c.action==Action::Accept){
@@ -125,6 +127,7 @@ void Engine::execute(const Command&c){
     }
     if(c.action==Action::Read){for(auto&f:state_.friends)if(f.number==c.number)f.unread=0;return;}
     if(c.action==Action::Delete){
+        std::vector<uint64_t> cancel;for(auto&[id,t]:transfers_)if(t.view.number==c.number)cancel.push_back(id);for(auto id:cancel)finish_file(id,"cancelled");
         auto old=state_.friends;
         if(!tox_friend_delete(tox_,c.number,nullptr))throw std::runtime_error("Friend no longer exists");
         save();history_.erase(c.number);for(auto&f:old)if(f.number==c.number)unlink((directory_+"/chat-"+f.key+".json").c_str());refresh_friends();
@@ -146,6 +149,8 @@ void Engine::run(){
     try{
         if(mkdir(directory_.c_str(),0700)&&errno!=EEXIST)throw std::runtime_error("Cannot create Tox data directory");
         chmod(directory_.c_str(),0700);
+        if(mkdir((directory_+"/media").c_str(),0700)&&errno!=EEXIST)throw std::runtime_error("Cannot create media folder");
+        try{state_.background=Json::parse(c1::read_file(directory_+"/preferences.json",4096)).value("background",false);}catch(...){}
         lockfd=open((directory_+"/session.lock").c_str(),O_CREAT|O_RDWR|O_CLOEXEC,0600);
         if(lockfd<0||flock(lockfd,LOCK_EX|LOCK_NB))throw std::runtime_error("This Tox identity is already open");
         Tox_Options*options=tox_options_new(nullptr);if(!options)throw std::runtime_error("Cannot allocate Tox options");
@@ -165,6 +170,7 @@ void Engine::run(){
             refresh_friends();
             try{auto j=Json::parse(c1::read_file(directory_+"/requests.json",32768));if(j.is_array()&&j.size()<=16)for(auto&r:j){uint8_t k[TOX_PUBLIC_KEY_SIZE];std::string key=r.at("key");if(unhex(key,k,sizeof k))state_.requests.push_back({hex(k,sizeof k),clean_text(r.at("message"),256)});}}catch(...){}
             tox_callback_friend_request(tox_,on_request);tox_callback_friend_message(tox_,on_message);tox_callback_friend_read_receipt(tox_,on_receipt);
+            tox_callback_file_recv(tox_,on_file_offer);tox_callback_file_recv_chunk(tox_,on_file_chunk);tox_callback_file_chunk_request(tox_,on_file_request);tox_callback_file_recv_control(tox_,on_file_control);
             state_.ready=true;state_.revision++;
             c1::save_private(directory_+"/my-id.txt",state_.id+"\n");
             try{bootstrap();}catch(const std::exception&e){error(e.what());}
@@ -175,7 +181,8 @@ void Engine::run(){
                 // Core and callbacks are confined to this worker. Snapshots never
                 // call toxcore and no LVGL object is touched from this thread.
                 while(!commands_.empty()){auto c=std::move(commands_.front());commands_.pop_front();bool ok=true;try{execute(c);}catch(const std::exception&e){error(e.what());ok=false;}if(c.token){state_.completed=c.token;state_.command_ok=ok;}}
-                tox_iterate(tox_,this);publish();auto now=std::chrono::steady_clock::now();
+                tox_iterate(tox_,this);publish();
+                std::vector<uint64_t> offline;for(auto&[id,t]:transfers_)if(tox_friend_get_connection_status(tox_,t.view.number,nullptr)==TOX_CONNECTION_NONE)offline.push_back(id);for(auto id:offline)finish_file(id,"failed");auto now=std::chrono::steady_clock::now();
                 if(!state_.online&&now-last_boot>std::chrono::seconds(30)){try{bootstrap();}catch(const std::exception&e){error(e.what());}last_boot=now;}
                 if(now-last_save>std::chrono::seconds(60)){try{save();}catch(const std::exception&e){error(e.what());}last_save=now;}
             }
@@ -183,6 +190,7 @@ void Engine::run(){
         }
         {std::lock_guard<std::mutex> guard(mutex_);save();}
     }catch(const std::exception&e){std::lock_guard<std::mutex> guard(mutex_);state_.ready=false;state_.status="无法启动";error(e.what());std::fprintf(stderr,"[tox startup] %s\n",e.what());}
+    while(!transfers_.empty()){try{finish_file(transfers_.begin()->first,"cancelled");}catch(...){}}
     if(tox_){tox_kill(tox_);tox_=nullptr;}if(lockfd>=0)close(lockfd);
 }
 }

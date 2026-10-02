@@ -4,6 +4,7 @@
 
 ```text
 apps/
+├── appstore/       按需安装、逐应用更新与首页管理
 ├── launcher/       应用入口、原装桌面退出/恢复监督器
 ├── streamplayer/   Emby / Jellyfin：登录、媒体库、服务器转码播放
 ├── calendar/       月历、本地日程增删改、ICS 订阅管理
@@ -38,7 +39,9 @@ apps/
 
 ## 新增应用
 
-- **[Tox 聊天](tox/README.md)**：基于 c-toxcore 的原生点对点文字聊天，支持好友请求、送达回执、本地记录、显示自己的 ID 二维码和摄像头扫码添加。扫码提供数码裁剪与对焦；身份保存保留上一份有效快照。默认构建已包含，身份与聊天数据不随源码发布。
+- **[应用商店](appstore/README.md)**：按需安装、单独更新，控制首页显示，卸载时保留个人数据和回退版本。刷新目录不会下载全部应用。
+
+- **[Tox 聊天](tox/README.md)**：基于 c-toxcore 的原生点对点聊天，支持文字、拍照和录音附件、送达回执、本地记录、可选后台收信、ID 二维码和摄像头扫码添加。扫码提供数码裁剪与对焦；身份保存保留上一份有效快照。默认构建已包含，身份与聊天数据不随源码发布。
 - **[设置](settings/README.md)**：左侧分类、右侧列表，W/S 选择、A/D 调节，触摸可整行点击并有大号 −／+ 和选项列表。WLAN 非阻塞扫描、连接结果与密码错误提示、隐藏网络、忘记网络；屏幕亮度、自动熄屏、媒体音量、USB ADB/MTP 切换（需确认）、无线调试、电池和本机信息。不提供关机、恢复出厂和蓝牙。
 - **[HID 键鼠](hidpilot/README.md)**：USB HID 与 ADB / MTP 共存，触控板、实体键盘、修饰键和滚轮控制电脑。0.2.0 起专注手动输入。
 - **[MoonPilot AI](moonpilot/README.md)**：独立的 Moonlight / Sunshine 远程操作应用，包含手动添加主机、PIN 配对、桌面预览、模型单步／十步操作，以及可配置 ASR、对话和 TTS。配对协议回归与真机解码通过；真实 Sunshine 串流和 AI 闭环待主机接入后验证。
@@ -106,6 +109,10 @@ apps/
 | [![Tox 真机两个测试身份的聊天记录](docs/screenshots/tox.png)](docs/screenshots/tox.png) | [![Tox 真机识别专用测试二维码后的确认页](docs/screenshots/tox-qr-confirm.png)](docs/screenshots/tox-qr-confirm.png) |
 
 Tox 截图使用专用测试身份；功能、按键与验证范围见 [Tox 说明](tox/README.md)。
+
+| 应用商店 | Tox 录音附件 |
+| --- | --- |
+| ![应用商店](docs/screenshots/appstore.png) | ![Tox 语音消息](docs/screenshots/tox-voice.png) |
 
 ## 构建、同步与启动
 
@@ -190,15 +197,13 @@ python3 ./tools/hotkey_service.py remove --serial MagicPen-931f06
 
 普通自定义应用短按电源键回 launcher；游戏模拟器短按显示长按提示，按住五秒退出；launcher 短按电源回原装桌面。进入自定义应用会真正停止 `smartUI` 和其中的原装界面，释放其内存；媒体、网络和 ADB 服务保留。监督器负责正常退出、launcher 崩溃后的原状态恢复。不要直接停掉监督器，也不要直接运行多个 framebuffer 应用。详见 [前台恢复边界](launcher/foreground-notes.md)。原装桌面增加图标需要另外接入厂商菜单；本次没有修改原装桌面二进制，也没有开机替换原桌面。
 
-## GitHub 更新检查
+## 应用商店与更新
 
-launcher 的 **App Updates** 打开检查页，访问：
+新版 launcher 的“应用商店”使用公开的 [store/catalog.json](store/catalog.json)，从 GitHub Releases 下载选中的一个应用包。未安装或不需要的应用不会自动下载／更新；已安装应用可控制首页显示。安装前验证 SHA-256，完整校验后再原子切换，旧版本及用户数据保留。
 
-`https://api.github.com/repos/zhuzhe1983/C1Max-Apps/contents/catalog.json?ref=main`
+版本较旧时拒绝降级；同版本而构建不同会明确提示并要求用户确认。Launcher、字体和公共运行时仍由基础安装维护，不能在商店中卸载。首次从旧版升级需要电脑部署一次基础包。详见 [应用商店](appstore/README.md)。
 
-使用 GitHub raw 内容类型读取 JSON，要求 `schema: 1`、`platform: c1max-mipsel-linux`。每项包含 `id`、三段数字 `version`、64 位 SHA-256 `revision`。检查新增应用和更高版本；同版本但源码哈希不同只标为“源码不同”，因为哈希本身不能判断本地还是远端更新。远程旧版本不会报成升级。HTTPS 验证证书，限制大小、超时及格式，不执行远端命令。
-
-按照当前选择，暂时只做公开更新接口，不存 GitHub Token、不自动下载安装。私有仓库/尚未发布清单的 404 明确提示更新源未公开或未发布；断网不显示“已是最新版”。更新源为公开仓库 C1Max-Apps，推送清单后即可检查，发布新应用前运行打包更新 `catalog.json`。源码 revision 用于变更检测，不能替代未来安装包签名。
+原 `catalog.json` 与 `streamplayer --updates` 仍提供兼容的只读版本检查，不执行安装。
 
 ## 验证
 

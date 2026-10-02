@@ -11,7 +11,8 @@
 #include <toxcore/tox.h>
 
 namespace chat {
-struct Message { std::string text, state; bool mine=false; uint32_t receipt=0; };
+struct Message { std::string text, state; bool mine=false; uint32_t receipt=0; std::string file,kind; uint64_t size=0; };
+struct Transfer { uint64_t id=0; uint32_t number=0,file_number=0; uint64_t size=0,done=0; bool mine=false; std::string name,file,kind,state; };
 struct Friend { uint32_t number=0; std::string key,name; bool online=false; unsigned unread=0; };
 struct Request { std::string key,message; };
 struct Snapshot {
@@ -21,12 +22,13 @@ struct Snapshot {
     bool command_ok=false;
     std::string id,name="C1 Max",status="正在连接网络…",error,dht_key;
     uint16_t udp_port=0;
-    bool ready=false, online=false;
+    bool ready=false, online=false, background=false;
     std::vector<Friend> friends;
     std::vector<Request> requests;
     std::vector<Message> messages;
+    std::vector<Transfer> transfers;
 };
-enum class Action { Add, Accept, Reject, Send, Rename, Delete, Read, Bootstrap };
+enum class Action { Add, Accept, Reject, Send, Rename, Delete, Read, Bootstrap, SendFile, AcceptFile, CancelFile, Background };
 struct Command { Action action; uint32_t number=0; std::string text,extra; uint16_t port=0; uint64_t token=0; };
 std::string hex(const uint8_t *data,size_t size);
 bool unhex(const std::string &text,uint8_t *out,size_t size);
@@ -50,6 +52,20 @@ private:
     Tox *tox_=nullptr;
     std::string last_saved_; // Last snapshot successfully loaded/saved by this instance.
     bool dirty_=false;
+    struct PendingFile { Transfer view; int fd=-1; };
+    std::map<uint64_t,PendingFile> transfers_;
+    uint64_t next_transfer_=0;
+    void file_offer(uint32_t,uint32_t,uint32_t,uint64_t,const uint8_t*,size_t);
+    void file_chunk(uint32_t,uint32_t,uint64_t,const uint8_t*,size_t);
+    void file_request(uint32_t,uint32_t,uint64_t,size_t);
+    void file_control(uint32_t,uint32_t,Tox_File_Control);
+    void finish_file(uint64_t,const std::string&);
+    void execute_file(const Command&);
+    uint64_t find_file(uint32_t,uint32_t);
+    static void on_file_offer(Tox*,uint32_t,uint32_t,uint32_t,uint64_t,const uint8_t*,size_t,void*);
+    static void on_file_chunk(Tox*,uint32_t,uint32_t,uint64_t,const uint8_t*,size_t,void*);
+    static void on_file_request(Tox*,uint32_t,uint32_t,uint64_t,size_t,void*);
+    static void on_file_control(Tox*,uint32_t,uint32_t,Tox_File_Control,void*);
     void run();
     void publish();
     void save();

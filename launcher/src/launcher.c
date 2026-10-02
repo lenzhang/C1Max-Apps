@@ -144,6 +144,12 @@ static struct fb_var_screeninfo fb_saved;
 static int touch_fd=-1,key_fd=-1,matrix_fd=-1,flip_x,flip_y;
 static int t_raw_x,t_raw_y,t_down,t_dropped;
 static volatile sig_atomic_t want_quit;
+/* POWER leaves for the stock desktop only on a second press within
+ * POWER_CONFIRM_MS; a single press (often a stray one from an app that is
+ * closing) just shows a hint. Presses right after an app returns are ignored. */
+#define POWER_CONFIRM_MS 2000
+#define POWER_GRACE_MS 800
+static int power_pressed;static int64_t power_armed_at,power_ignore_until;
 static const char *icon_root;
 static const uint32_t palette[]={0xff4385ba,0xff629c82,0xff8a74b5,0xffc18461,0xff638ac2,0xff718eac,0xff517a83};
 
@@ -423,7 +429,7 @@ static int poll_input(Touch *out,int timeout){
     for(int i=1;i<3;i++)if(fds[i].revents&POLLIN){struct input_event e;
         while(read(descriptors[i],&e,sizeof e)==sizeof e){
             if(e.type!=EV_KEY||e.value!=1)continue;
-            if(e.code==KEY_POWER){want_quit=1;continue;}
+            if(e.code==KEY_POWER){power_pressed=1;continue;}
             /* Backspace/Delete are editing keys, never launcher exit keys. */
             if(e.code==KEY_A||e.code==KEY_LEFT||e.code==KEY_UP){key_dirty|=change_page(-1);continue;}
             if(e.code==KEY_D||e.code==KEY_RIGHT||e.code==KEY_DOWN){key_dirty|=change_page(1);continue;}
@@ -477,7 +483,7 @@ static void launch_app(App *app){
         }
         fprintf(stderr,"[launcher] %s finished (status %d)\n",app->label,status);
     }else perror("[launcher] fork");
-    drain_input();
+    drain_input();power_pressed=0;power_armed_at=0;power_ignore_until=now_ms()+POWER_GRACE_MS;
 }
 static void open_selection(int index,char *toast,size_t size,int64_t *until){
     if(index<0||index>=napps)return;
@@ -522,6 +528,12 @@ int main(int argc,char **argv){
         if(keyboard_action>=0){int index=keyboard_action;keyboard_action=-1;
             open_selection(index,toast,sizeof toast,&toast_until);gesture.active=0;got=0;redraw=1;}
         int64_t now=now_ms();
+        if(power_pressed){power_pressed=0;
+            if(now<power_ignore_until){}
+            else if(power_armed_at&&now-power_armed_at<=POWER_CONFIRM_MS){want_quit=1;break;}
+            else{power_armed_at=now;snprintf(toast,sizeof toast,"再按一次电源键返回原厂桌面");toast_until=now+POWER_CONFIRM_MS;redraw=1;}
+        }
+        if(power_armed_at&&now-power_armed_at>POWER_CONFIRM_MS)power_armed_at=0;
         if(got&&touch.cancelled){gesture.active=0;pressed_app=-1;redraw=1;got=0;}
         if(got){
             int index=hit_test(touch.x,touch.y);

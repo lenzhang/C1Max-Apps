@@ -22,6 +22,11 @@ if [ -e "$BOOT_MARKER" ]; then
 fi
 : > "$BOOT_MARKER"
 
+if [ -f "$STATE/adb.onboot" ]; then
+    log 'adb.onboot present; enabling ADB'
+    /usr/bin/enable_adb.sh true || true
+fi
+
 if [ -f "$STATE/desktop.disabled" ]; then
     log 'Replacement disabled; starting stock UI'
     setprop ctl.start smartUI || true

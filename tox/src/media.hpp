@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 namespace chat {
+struct Preview { std::vector<uint32_t> pixels; unsigned width=0,height=0,seconds=0; std::string error; };
+Preview preview(const std::string&folder,const std::string&name,const std::string&kind);
 class Media {
     struct Impl;std::unique_ptr<Impl>impl_;
 public:

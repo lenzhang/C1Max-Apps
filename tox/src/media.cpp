@@ -143,15 +143,24 @@ std::string fresh_media(const std::string&folder,const char*ext){
     uint64_t size=0;DIR*d=opendir(folder.c_str());if(!d)throw std::runtime_error("附件目录不可用");while(auto*e=readdir(d)){struct stat s{};if(!lstat((folder+"/"+e->d_name).c_str(),&s)&&S_ISREG(s.st_mode))size+=s.st_size;}closedir(d);if(size>60*1024*1024)throw std::runtime_error("附件已占用 60 MB，请先清理");
     std::string p=folder+"/capture-XXXXXX";std::vector<char>b(p.begin(),p.end());b.push_back(0);int fd=mkstemp(b.data());if(fd<0)throw std::runtime_error("无法创建附件");close(fd);p=b.data();std::string final=p+ext;if(rename(p.c_str(),final.c_str())){unlink(p.c_str());throw std::runtime_error("无法创建附件");}return final.substr(folder.size()+1);
 }
-void check_voice(const std::string&path){
+unsigned check_voice(const std::string&path){
     auto data=c1::read_file(path,4*1024*1024);if(data.size()<44||data.compare(0,4,"RIFF")||data.compare(8,4,"WAVE"))throw std::runtime_error("录音不是 WAV 音频");
     auto le16=[&](size_t p){return uint16_t(uint8_t(data[p])|(uint16_t(uint8_t(data[p+1]))<<8));};auto le32=[&](size_t p){return uint32_t(le16(p))|(uint32_t(le16(p+2))<<16);};
-    bool fmt=false,pcm=false;uint32_t byte_rate=0;
+    bool fmt=false,pcm=false;uint32_t byte_rate=0,duration=0;
     for(size_t p=12;p+8<=data.size();){uint32_t n=le32(p+4);if(n>data.size()-p-8)throw std::runtime_error("录音数据不完整");
         if(data.compare(p,4,"fmt ")==0){if(n<16||le16(p+8)!=1||le16(p+10)<1||le16(p+10)>2||le32(p+12)<8000||le32(p+12)>48000||le16(p+22)!=16)throw std::runtime_error("仅支持 8–48 kHz、16 位 PCM WAV");byte_rate=le32(p+16);if(byte_rate!=le32(p+12)*le16(p+10)*2)throw std::runtime_error("无效 WAV 采样格式");fmt=true;}
-        if(data.compare(p,4,"data")==0){if(!fmt||n<1600||n>byte_rate*120)throw std::runtime_error("语音过短或超过两分钟");pcm=true;}p+=8+n+(n&1);
-    }if(!pcm)throw std::runtime_error("录音没有有效声音数据");
+        if(data.compare(p,4,"data")==0){if(!fmt||n<1600||n>byte_rate*120)throw std::runtime_error("语音过短或超过两分钟");pcm=true;duration=(n+byte_rate-1)/byte_rate;}p+=8+n+(n&1);
+    }if(!pcm)throw std::runtime_error("录音没有有效声音数据");return duration;
 }
+}
+Preview preview(const std::string&folder,const std::string&name,const std::string&kind){
+    Preview p;
+    try{
+        if(name.empty()||name.find("..")!=std::string::npos||name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos)throw std::runtime_error("无效附件");
+        if(kind=="photo"){if(!camera::load_photo(folder+"/"+name,168,100,p.pixels,p.width,p.height,p.error))p.pixels.clear();}
+        else if(kind=="voice")p.seconds=check_voice(folder+"/"+name);
+    }catch(const std::exception&e){p.error=e.what();}
+    return p;
 }
 Media::Media(std::string folder):impl_(new Impl(std::move(folder))){mkdir(impl_->folder.c_str(),0700);}
 Media::~Media(){close();}
@@ -170,7 +179,7 @@ void Media::capture(){
 void Media::record(){close();file=fresh_media(impl_->folder,".wav");impl_->temporary=true;kind="voice";impl_->recorder.start({"/usr/bin/arecord","-q","-D","plughw:0,1","-f","S16_LE","-r","16000","-c","1","-t","wav","-d","30",impl_->folder+"/"+file},impl_->folder+"/record.log");recording=true;seconds=0;impl_->started=media_tick();status="正在录音，再按回车结束（最长 30 秒）";}
 void Media::finish_record(){if(recording){impl_->recorder.finish_recording();status="正在保存录音…";}}
 void Media::play(){if(playing){impl_->player.stop();playing=false;return;}if(!ready||kind!="voice")return;check_voice(impl_->folder+"/"+file);impl_->player.start({"/usr/bin/mplayer","-noconfig","all","-quiet","-noconsolecontrols","-nolirc","-nojoystick","-nomouseinput","-vo","null","-ao","media",impl_->folder+"/"+file},impl_->folder+"/play.log");playing=true;}
-void Media::load(const std::string&name,const std::string&type){close();if(name.empty()||name.find("..")!=std::string::npos||name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos)throw std::runtime_error("无效的附件");file=name;kind=type;std::string error;if(type=="photo"){if(!camera::load_photo(impl_->folder+"/"+file,460,225,pixels,width,height,error))throw std::runtime_error(error);}else check_voice(impl_->folder+"/"+file);ready=true;status="已接收的附件";}
+void Media::load(const std::string&name,const std::string&type){close();if(name.empty()||name.find("..")!=std::string::npos||name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos)throw std::runtime_error("无效的附件");file=name;kind=type;std::string error;if(type=="photo"){if(!camera::load_photo(impl_->folder+"/"+file,460,225,pixels,width,height,error))throw std::runtime_error(error);}else seconds=check_voice(impl_->folder+"/"+file);ready=true;status="已接收的附件";}
 void Media::poll(){
     if(camera&&media_tick()-impl_->last_frame>90){impl_->last_frame=media_tick();std::string error;int r=impl_->camera.frame(error);if(r<0){camera=false;throw std::runtime_error(error);}if(r>0){width=300;height=225;pixels.resize(width*height);auto&c=impl_->camera;unsigned cw=std::min(c.width(),c.height()*4/3),ch=cw*3/4,x0=(c.width()-cw)/2,y0=(c.height()-ch)/2;for(unsigned y=0;y<height;y++)for(unsigned x=0;x<width;x++)pixels[size_t(y)*width+x]=c.pixel(x0+x*cw/width,y0+y*ch/height);}}
     if(recording){seconds=(media_tick()-impl_->started)/1000;if(impl_->recorder.poll()){recording=false;check_voice(impl_->folder+"/"+file);ready=true;status="录音已保存，可以试听后发送";}}

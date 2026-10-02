@@ -519,6 +519,7 @@ int main(int argc,char **argv){
     key_fd=open("/dev/input/event1",O_RDONLY|O_NONBLOCK|O_CLOEXEC);
     matrix_fd=open("/dev/input/event0",O_RDONLY|O_NONBLOCK|O_CLOEXEC);drain_input();
     Gesture gesture={0};Touch touch={0};char toast[96]={0};int64_t toast_until=0;int redraw=1;
+    const char *heartbeat=getenv("C1L_HEARTBEAT");
     while(!want_quit){
         int got=poll_input(&touch,80);if(want_quit)break;
         if(key_dirty){redraw=1;key_dirty=0;}
@@ -553,7 +554,8 @@ int main(int argc,char **argv){
             }
         }
         if(toast[0]&&now>=toast_until){toast[0]=0;redraw=1;}
-        if(redraw&&!want_quit){draw_grid(toast[0]?toast:NULL);fb_present();redraw=0;}
+        if(redraw&&!want_quit){draw_grid(toast[0]?toast:NULL);fb_present();redraw=0;
+            if(heartbeat){FILE *f=fopen(heartbeat,"w");if(f){fprintf(f,"%d\n",(int)getpid());fclose(f);}heartbeat=NULL;}}
     }
     typeface_close();
     for(int i=0;i<napps;i++)free(apps[i].icon);

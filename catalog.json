@@ -5,7 +5,7 @@
     {
       "id": "launcher",
       "version": "0.2.0",
-      "revision": "413cd0482832bf74086ec6b874de9c17060517558d763002c10841c4d7c0de94"
+      "revision": "e85fdd8b6cb9d69cdbb969ecc2f3a0415241dc0b8f4715877c48134f5ccd9056"
     },
     {
       "id": "piano",
@@ -15,7 +15,7 @@
     {
       "id": "nes",
       "version": "0.2.0",
-      "revision": "e7b121545ecad025ea0ec7c9fb8cbda1583ff0a79127832da66253616e4b997f"
+      "revision": "c9a5bf6204ee8d9660b31953d406432f59f2f36bde73669df5a4d58d04f2f9cc"
     },
     {
       "id": "streamplayer",

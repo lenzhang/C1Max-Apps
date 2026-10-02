@@ -46,7 +46,7 @@ for name in ids:
     (out/name).mkdir()
     shutil.copy2(root/'.build/mips'/('c1max-'+name),out/name)
     (out/name/'manifest.json').write_text(json.dumps(next(a for a in apps if a['id']==name),indent=2)+'\n')
-for name in ['run.sh','apps.txt']:
+for name in ['run.sh','apps.txt','desktop-service.sh']:
     shutil.copy2(root/'launcher'/name,out/'launcher'/name)
 shutil.copytree(root/'launcher/licenses',out/'launcher/licenses')
 shutil.copy2(root/'.build/mips/c1max-yuv-pipe.so',out/'streamplayer')

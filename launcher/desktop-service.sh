@@ -22,11 +22,6 @@ if [ -e "$BOOT_MARKER" ]; then
 fi
 : > "$BOOT_MARKER"
 
-if [ -f "$STATE/adb.onboot" ]; then
-    log 'adb.onboot present; enabling ADB'
-    /usr/bin/enable_adb.sh true || true
-fi
-
 if [ -f "$STATE/desktop.disabled" ]; then
     log 'Replacement disabled; starting stock UI'
     setprop ctl.start smartUI || true
@@ -61,6 +56,12 @@ if [ "$state" != running ] && [ "$state" != stopped ]; then
     exit 0
 fi
 log "smartUI settled state=$state"
+
+if [ -f "$STATE/adb.onboot" ]; then
+    log 'adb.onboot present; enabling ADB'
+    setprop service.adb.tcp.port 5555 || true
+    /usr/bin/enable_adb.sh true || true
+fi
 
 rm -f "$HEARTBEAT"
 log "Starting custom desktop release=$(readlink "$BASE/current" 2>/dev/null || echo unknown)"

@@ -25,7 +25,7 @@ folders=[base+'/data/'+name for name in ids]+[base+'/data/nes/roms',base+'/data/
 call('shell','mkdir -p '+stage+' '+' '.join(folders)+'; chmod 700 '+base+'/data '+' '.join(folders))
 call('push',str(archive),stage+'/payload.tar')
 # Globs expand on the device: archives made on Windows hosts carry no exec bits.
-executables=['launcher/run.sh','pcsx4all/c1max-psx-core','dosbox/c1max-dos-core','hidpilot/c1max-hidpilot-usb','shared/c1max-*','linux-tools/bin/*']+[name+'/c1max-'+name for name in ids]
+executables=['launcher/run.sh','launcher/desktop-service.sh','pcsx4all/c1max-psx-core','dosbox/c1max-dos-core','hidpilot/c1max-hidpilot-usb','shared/c1max-*','linux-tools/bin/*']+[name+'/c1max-'+name for name in ids]
 cmd=f'cd {stage} && tar xf payload.tar && sha256sum -c SHA256SUMS && rm payload.tar && chmod 755 '+ ' '.join(executables)
 if 'OK' not in shell(cmd):raise SystemExit('Device verification failed; current release unchanged')
 # old BusyBox adb does not propagate remote exit statuses, so verify explicitly.

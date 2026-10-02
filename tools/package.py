@@ -22,7 +22,7 @@ for name,entry in json.loads(tool_verification.read_text())['binaries'].items():
     if not binary.is_file() or hashlib.sha256(binary.read_bytes()).hexdigest()!=entry['sha256']:
         raise SystemExit('Unverified Linux tool: '+name)
 # A CR in a shell rc/script breaks prompts and commands on the device (core.autocrlf checkouts).
-for name in ['terminal/assets/shellrc','terminal/assets/inputrc','launcher/run.sh','launcher/apps.txt']:
+for name in ['terminal/assets/shellrc','terminal/assets/inputrc','launcher/run.sh','launcher/apps.txt','launcher/desktop-service.sh']:
     if b'\r' in (root/name).read_bytes():raise SystemExit(name+' has CRLF line endings; re-checkout with LF (see .gitattributes)')
 apps=[]
 for name in ids:
@@ -49,8 +49,9 @@ for name in ids:
     (out/name).mkdir()
     shutil.copy2(root/'.build/mips'/('c1max-'+name),out/name)
     (out/name/'manifest.json').write_text(json.dumps(next(a for a in apps if a['id']==name),indent=2)+'\n')
-for name in ['run.sh','apps.txt']:
+for name in ['run.sh','apps.txt','desktop-service.sh']:
     shutil.copy2(root/'launcher'/name,out/'launcher'/name)
+    if name.endswith('.sh'):(out/'launcher'/name).chmod(0o755)
 shutil.copytree(root/'launcher/licenses',out/'launcher/licenses')
 shutil.copy2(root/'.build/mips/c1max-yuv-pipe.so',out/'streamplayer')
 (out/'streamplayer/licenses').mkdir()

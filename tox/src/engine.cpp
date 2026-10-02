@@ -46,13 +46,22 @@ std::string clean_text(const std::string&s,size_t cap){
 Engine::Engine(std::string directory,std::string nodes):directory_(std::move(directory)),nodes_(std::move(nodes)){worker_=std::thread(&Engine::run,this);}
 Engine::~Engine(){stop_=true;if(worker_.joinable())worker_.join();}
 bool Engine::submit(Command c){std::lock_guard<std::mutex> lock(mutex_);if(!state_.ready||commands_.size()>=16||c.text.size()>4096||c.extra.size()>256)return false;commands_.push_back(std::move(c));return true;}
-Snapshot Engine::snapshot(uint32_t n){std::lock_guard<std::mutex> lock(mutex_);auto s=state_;auto it=history_.find(n);if(it!=history_.end())s.messages=it->second;for(auto&[id,t]:transfers_)if(n==UINT32_MAX||t.view.number==n)s.transfers.push_back(t.view);return s;}
+Snapshot Engine::snapshot(uint32_t n){std::lock_guard<std::mutex> lock(mutex_);auto s=state_;for(auto&[number,list]:history_)for(auto&m:list)if(m.mine&&m.state=="queued")s.queued++;auto it=history_.find(n);if(it!=history_.end())s.messages=it->second;for(auto&[id,t]:transfers_)if(n==UINT32_MAX||t.view.number==n)s.transfers.push_back(t.view);return s;}
 void Engine::error(const std::string&e){state_.error=clean_text(e,180);state_.error_count++;state_.revision++;}
 void Engine::publish(){
     auto connection=tox_self_get_connection_status(tox_);bool online=connection!=TOX_CONNECTION_NONE;
     std::string status=connection==TOX_CONNECTION_UDP?"网络已连接 · UDP":connection==TOX_CONNECTION_TCP?"网络已连接 · TCP":"正在连接网络…";
     if(online!=state_.online||status!=state_.status){state_.online=online;state_.status=status;state_.revision++;}
-    for(auto&f:state_.friends){bool on=tox_friend_get_connection_status(tox_,f.number,nullptr)!=TOX_CONNECTION_NONE;std::string name=display_name(tox_,f.number);if(name.empty())name=f.key.substr(0,12);if(on!=f.online||name!=f.name){f.online=on;f.name=name;state_.revision++;}}
+    for(auto&f:state_.friends){
+        bool on=tox_friend_get_connection_status(tox_,f.number,nullptr)!=TOX_CONNECTION_NONE;
+        std::string name=display_name(tox_,f.number);if(name.empty())name=f.key.substr(0,12);
+        if(on&&!f.online){retry_at_.erase(f.number);retry_delay_.erase(f.number);}
+        if(!on&&f.online){
+            bool changed=false;for(auto&m:history_[f.number])if(m.mine&&m.state=="sent"){m.state="unconfirmed";changed=true;}
+            if(changed)try{save_history(f.number);}catch(const std::exception&e){error(e.what());}
+        }
+        if(on!=f.online||name!=f.name){f.online=on;f.name=name;state_.revision++;}
+    }
 }
 void Engine::refresh_friends(){
     std::vector<uint32_t> numbers(tox_self_get_friend_list_size(tox_));tox_self_get_friend_list(tox_,numbers.data());
@@ -62,7 +71,27 @@ void Engine::refresh_friends(){
         for(auto&old:state_.friends)if(old.key==f.key)f.unread=old.unread;
         if(!history_.count(n)){
             std::vector<Message> list;
-            try{auto j=Json::parse(c1::read_file(directory_+"/chat-"+f.key+".json",256*1024));if(!j.is_array()||j.size()>max_history)throw std::runtime_error("Invalid chat history");for(auto&m:j){Message v;v.text=clean_text(m.at("text").get<std::string>(),max_message);v.mine=m.at("mine").get<bool>();v.state=m.value("state","");v.file=m.value("file",std::string());v.kind=m.value("kind",std::string());v.size=m.value("size",uint64_t(0));if(v.file.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos||v.file.find("..")!=std::string::npos){v.file.clear();v.kind.clear();}if(v.state!="delivered"&&v.state!="received"&&v.state!="complete"&&v.state!="cancelled"&&v.state!="failed")v.state="unconfirmed";list.push_back(std::move(v));}}catch(...){}
+            const auto path=directory_+"/chat-"+f.key+".json";
+            try{
+                struct stat st{};
+                if(stat(path.c_str(),&st)==0){
+                    auto j=Json::parse(c1::read_file(path,256*1024));
+                    if(!j.is_array()||j.size()>max_history)throw std::runtime_error("Invalid chat history");
+                    std::set<uint64_t>ids;
+                    for(auto&m:j){
+                        Message v;v.text=clean_text(m.at("text").get<std::string>(),max_message);v.mine=m.at("mine").get<bool>();
+                        v.state=m.value("state","");v.file=m.value("file",std::string());v.kind=m.value("kind",std::string());v.size=m.value("size",uint64_t(0));v.id=m.value("id",uint64_t(0));
+                        if(v.id>UINT64_MAX/2||(v.id&&!ids.insert(v.id).second))throw std::runtime_error("Invalid message ID");
+                        next_message_=std::max(next_message_,v.id);
+                        if(v.file.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")!=std::string::npos||v.file.find("..")!=std::string::npos)throw std::runtime_error("Invalid attachment path");
+                        if(v.state=="queued"){
+                            if(!v.mine||v.text.empty()||(v.file.empty()?(v.text.size()>1024||v.text!=m.at("text").get<std::string>()):((v.kind!="photo"&&v.kind!="voice")||v.size<12||v.size>4*1024*1024)))throw std::runtime_error("Invalid queued message");
+                        }else if(v.state!="delivered"&&v.state!="received"&&v.state!="complete"&&v.state!="cancelled"&&v.state!="failed")v.state="unconfirmed";
+                        list.push_back(std::move(v));
+                    }
+                    for(auto&m:list)if(!m.id)m.id=++next_message_;
+                }else if(errno!=ENOENT)throw std::runtime_error("Cannot read chat history");
+            }catch(...){list.clear();blocked_history_.insert(n);error("好友记录无法读取，原文件已保留，暂不发送给此好友");}
             history_[n]=std::move(list);
         }next.push_back(std::move(f));
     }state_.friends=std::move(next);state_.revision++;
@@ -80,8 +109,11 @@ void Engine::save(){
 void Engine::save_requests(){Json j=Json::array();for(auto&r:state_.requests)j.push_back({{"key",r.key},{"message",r.message}});c1::save_private(directory_+"/requests.json",j.dump());}
 void Engine::save_history(uint32_t n){
     auto f=std::find_if(state_.friends.begin(),state_.friends.end(),[n](const Friend&f){return f.number==n;});if(f==state_.friends.end())return;
-    auto&list=history_[n];if(list.size()>max_history)list.erase(list.begin(),list.end()-max_history);
-    Json j=Json::array();for(auto&m:list)j.push_back({{"text",m.text},{"mine",m.mine},{"state",m.state},{"file",m.file},{"kind",m.kind},{"size",m.size}});
+    if(blocked_history_.count(n))throw std::runtime_error("好友记录损坏，已保留原文件");
+    auto&list=history_[n];
+    // Never age an unsent message out of the ordinary 60-message history.
+    while(list.size()>max_history){auto old=std::find_if(list.begin(),list.end(),[](auto&m){return !pending_message(m);});if(old==list.end())throw std::runtime_error("待发记录超过上限");list.erase(old);}
+    Json j=Json::array();for(auto&m:list)j.push_back({{"text",m.text},{"mine",m.mine},{"state",m.state},{"file",m.file},{"kind",m.kind},{"size",m.size},{"id",m.id}});
     c1::save_private(directory_+"/chat-"+f->key+".json",j.dump());
 }
 void Engine::receive_request(const uint8_t*k,const uint8_t*m,size_t n){
@@ -93,7 +125,7 @@ void Engine::receive_request(const uint8_t*k,const uint8_t*m,size_t n){
 }
 void Engine::receive_message(uint32_t n,const uint8_t*m,size_t len){
     auto f=std::find_if(state_.friends.begin(),state_.friends.end(),[n](const Friend&f){return f.number==n;});if(f==state_.friends.end())return;
-    history_[n].push_back({clean_text(std::string(reinterpret_cast<const char*>(m),len),max_message),"received",false,0});f->unread=std::min(999u,f->unread+1);state_.revision++;save_history(n);
+    history_[n].push_back({clean_text(std::string(reinterpret_cast<const char*>(m),len),max_message),"received",false,0,"","",0,++next_message_});f->unread=std::min(999u,f->unread+1);state_.revision++;save_history(n);
 }
 void Engine::receipt(uint32_t n,uint32_t receipt){for(auto&m:history_[n])if(m.mine&&m.state=="sent"&&m.receipt==receipt){m.state="delivered";state_.revision++;save_history(n);break;}}
 // Never unwind a C++ exception through toxcore's C stack.
@@ -103,6 +135,7 @@ void Engine::on_receipt(Tox*,uint32_t n,uint32_t r,void*p){auto&e=*static_cast<E
 void Engine::execute(const Command&c){
     state_.error.clear();state_.revision++;
     if(c.action==Action::Background){c1::save_private(directory_+"/preferences.json",Json{{"background",c.text=="1"}}.dump());state_.background=c.text=="1";return;}
+    if(c.action==Action::CancelQueued||c.action==Action::RetryQueued){execute_outbox(c);return;}
     if(c.action==Action::SendFile||c.action==Action::AcceptFile||c.action==Action::CancelFile){execute_file(c);return;}
     if(c.action==Action::Bootstrap){uint8_t key[TOX_PUBLIC_KEY_SIZE];if(!unhex(c.extra,key,sizeof key)||c.text.empty()||!c.port)throw std::runtime_error("Invalid bootstrap node");if(!tox_bootstrap(tox_,c.text.c_str(),c.port,key,nullptr))throw std::runtime_error("Bootstrap failed");return;}
     if(c.action==Action::Rename){auto name=clean_text(c.text,64);if(name.empty())throw std::runtime_error("Name cannot be empty");if(!tox_self_set_name(tox_,reinterpret_cast<const uint8_t*>(name.data()),name.size(),nullptr))throw std::runtime_error("Cannot set name");state_.name=name;dirty_=true;save();return;}
@@ -117,12 +150,8 @@ void Engine::execute(const Command&c){
     }
     if(c.action==Action::Accept||c.action==Action::Reject){auto&v=state_.requests;v.erase(std::remove_if(v.begin(),v.end(),[&](const Request&r){return r.key==c.text;}),v.end());save_requests();return;}
     if(c.action==Action::Send){
-        if(tox_friend_get_connection_status(tox_,c.number,nullptr)==TOX_CONNECTION_NONE)throw std::runtime_error("好友离线，文字仍保留在输入框");
         if(c.text.empty()||c.text.size()>1024||clean_text(c.text,1024)!=c.text)throw std::runtime_error("Invalid message (maximum 1024 UTF-8 bytes)");
-        Tox_Err_Friend_Send_Message err;auto receipt=tox_friend_send_message(tox_,c.number,TOX_MESSAGE_TYPE_NORMAL,reinterpret_cast<const uint8_t*>(c.text.data()),c.text.size(),&err);
-        if(err!=TOX_ERR_FRIEND_SEND_MESSAGE_OK)throw std::runtime_error("Message was not sent, code "+std::to_string(err));
-        history_[c.number].push_back({c.text,"sent",true,receipt});
-        try{save_history(c.number);}catch(const std::exception&){error("消息已发出，但本机记录保存失败");}
+        queue_message(c.number,{c.text,"queued",true});
         return;
     }
     if(c.action==Action::Read){for(auto&f:state_.friends)if(f.number==c.number)f.unread=0;return;}
@@ -130,7 +159,7 @@ void Engine::execute(const Command&c){
         std::vector<uint64_t> cancel;for(auto&[id,t]:transfers_)if(t.view.number==c.number)cancel.push_back(id);for(auto id:cancel)finish_file(id,"cancelled");
         auto old=state_.friends;
         if(!tox_friend_delete(tox_,c.number,nullptr))throw std::runtime_error("Friend no longer exists");
-        save();history_.erase(c.number);for(auto&f:old)if(f.number==c.number)unlink((directory_+"/chat-"+f.key+".json").c_str());refresh_friends();
+        save();history_.erase(c.number);blocked_history_.erase(c.number);retry_at_.erase(c.number);retry_delay_.erase(c.number);for(auto&f:old)if(f.number==c.number)unlink((directory_+"/chat-"+f.key+".json").c_str());refresh_friends();
     }
 }
 void Engine::bootstrap(){
@@ -181,7 +210,7 @@ void Engine::run(){
                 // Core and callbacks are confined to this worker. Snapshots never
                 // call toxcore and no LVGL object is touched from this thread.
                 while(!commands_.empty()){auto c=std::move(commands_.front());commands_.pop_front();bool ok=true;try{execute(c);}catch(const std::exception&e){error(e.what());ok=false;}if(c.token){state_.completed=c.token;state_.command_ok=ok;}}
-                tox_iterate(tox_,this);publish();
+                tox_iterate(tox_,this);publish();process_outbox();
                 std::vector<uint64_t> offline;for(auto&[id,t]:transfers_)if(tox_friend_get_connection_status(tox_,t.view.number,nullptr)==TOX_CONNECTION_NONE)offline.push_back(id);for(auto id:offline)finish_file(id,"failed");auto now=std::chrono::steady_clock::now();
                 if(!state_.online&&now-last_boot>std::chrono::seconds(30)){try{bootstrap();}catch(const std::exception&e){error(e.what());}last_boot=now;}
                 if(now-last_save>std::chrono::seconds(60)){try{save();}catch(const std::exception&e){error(e.what());}last_save=now;}

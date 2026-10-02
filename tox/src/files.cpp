@@ -28,20 +28,20 @@ void Engine::finish_file(uint64_t id,const std::string&state){
     auto it=transfers_.find(id);if(it==transfers_.end())return;auto t=it->second;transfers_.erase(it);
     if(t.fd>=0)close(t.fd);if(!t.view.mine&&!t.view.file.empty())unlink((directory_+"/media/"+t.view.file+".part").c_str());
     if(state!="complete")tox_file_control(tox_,t.view.number,t.view.file_number,TOX_FILE_CONTROL_CANCEL,nullptr);
-    for(auto&m:history_[t.view.number])if(m.file==t.view.file&&!m.file.empty()&&(m.state=="waiting"||m.state=="receiving"))m.state=state;
+    for(auto&m:history_[t.view.number])if(m.id==t.message&&t.message&&(m.state=="waiting"||m.state=="receiving"))m.state=state;
     state_.revision++;save_history(t.view.number);
 }
 void Engine::execute_file(const Command&c){
     if(c.action==Action::SendFile){
-        if(transfers_.size()>=8)throw std::runtime_error("最多同时传输八个附件");
-        if(tox_friend_get_connection_status(tox_,c.number,nullptr)==TOX_CONNECTION_NONE)throw std::runtime_error("好友离线，附件未发送");
         if(!leaf(c.text))throw std::runtime_error("无效的附件文件名");auto kind=kind_of(c.text);if(kind.empty())throw std::runtime_error("只支持 JPEG 照片和 WAV 语音");
         auto path=directory_+"/media/"+c.text;int fd=open(path.c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW);if(fd<0)throw std::runtime_error("附件不存在");struct stat st{};
-        try{if(fstat(fd,&st)||!S_ISREG(st.st_mode)||st.st_size<12||uint64_t(st.st_size)>limit)throw std::runtime_error("附件必须小于 4 MB");sniff(fd,kind);}catch(...){close(fd);throw;}
-        Tox_Err_File_Send err;uint32_t f=tox_file_send(tox_,c.number,TOX_FILE_KIND_DATA,st.st_size,nullptr,reinterpret_cast<const uint8_t*>(c.text.data()),c.text.size(),&err);
-        if(err!=TOX_ERR_FILE_SEND_OK){close(fd);throw std::runtime_error("无法发送附件请求");}
-        Transfer t{++next_transfer_,c.number,f,uint64_t(st.st_size),0,true,c.text,c.text,kind,"waiting"};transfers_[t.id]={t,fd};
-        history_[c.number].push_back({kind=="photo"?"照片":"语音","waiting",true,0,c.text,kind,uint64_t(st.st_size)});save_history(c.number);return;
+        try{
+            if(fstat(fd,&st)||!S_ISREG(st.st_mode)||st.st_size<12||uint64_t(st.st_size)>limit)throw std::runtime_error("附件必须小于 4 MB");
+            sniff(fd,kind);room(directory_+"/media",0);
+            if(fsync(fd))throw std::runtime_error("附件保存失败");
+        }catch(...){close(fd);throw;}close(fd);
+        int dir=open((directory_+"/media").c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);if(dir<0)throw std::runtime_error("附件目录无法同步");int synced=fsync(dir);close(dir);if(synced)throw std::runtime_error("附件目录无法同步");
+        queue_message(c.number,{kind=="photo"?"照片":"语音","queued",true,0,c.text,kind,uint64_t(st.st_size)});return;
     }
     uint64_t id=0;try{id=std::stoull(c.text);}catch(...){throw std::runtime_error("附件请求不存在");}
     auto it=transfers_.find(id);if(it==transfers_.end()||it->second.view.number!=c.number)throw std::runtime_error("附件请求已结束");
@@ -49,8 +49,19 @@ void Engine::execute_file(const Command&c){
     auto&t=it->second;if(t.view.mine||t.view.state!="offered")throw std::runtime_error("附件已处理");
     uint64_t reserved=0;for(auto&[k,v]:transfers_)if(!v.view.mine&&v.view.state!="offered")reserved+=v.view.size-v.view.done;
     room(directory_+"/media",reserved+t.view.size);t.view.file=fresh(directory_+"/media",t.view.kind,t.fd);t.view.state="receiving";
-    history_[c.number].push_back({t.view.kind=="photo"?"照片":"语音","receiving",false,0,t.view.file,t.view.kind,t.view.size});save_history(c.number);
+    t.message=++next_message_;history_[c.number].push_back({t.view.kind=="photo"?"照片":"语音","receiving",false,0,t.view.file,t.view.kind,t.view.size,t.message});save_history(c.number);
     if(!tox_file_control(tox_,c.number,t.view.file_number,TOX_FILE_CONTROL_RESUME,nullptr)){finish_file(id,"failed");throw std::runtime_error("无法接受附件");}
+}
+bool Engine::offer_file(uint32_t n,Message&m){
+    if(transfers_.size()>=8)return false;
+    if(!leaf(m.file)||kind_of(m.file)!=m.kind)throw std::runtime_error("待发附件格式无效");
+    int fd=open((directory_+"/media/"+m.file).c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+    if(fd<0)throw std::runtime_error("待发附件已不存在，可在队列中取消");
+    struct stat st{};
+    try{if(fstat(fd,&st)||!S_ISREG(st.st_mode)||uint64_t(st.st_size)!=m.size||m.size>limit)throw std::runtime_error("待发附件已改变");sniff(fd,m.kind);}catch(...){close(fd);throw;}
+    Tox_Err_File_Send err;uint32_t f=tox_file_send(tox_,n,TOX_FILE_KIND_DATA,m.size,nullptr,reinterpret_cast<const uint8_t*>(m.file.data()),m.file.size(),&err);
+    if(err!=TOX_ERR_FILE_SEND_OK){close(fd);if(err==TOX_ERR_FILE_SEND_FRIEND_NOT_CONNECTED||err==TOX_ERR_FILE_SEND_TOO_MANY)return false;throw std::runtime_error("无法发送附件请求");}
+    m.state="waiting";Transfer t{++next_transfer_,n,f,m.size,0,true,m.file,m.file,m.kind,"waiting"};transfers_[t.id]={t,fd,m.id};return true;
 }
 void Engine::file_offer(uint32_t n,uint32_t f,uint32_t kind,uint64_t size,const uint8_t*name,size_t len){
     auto media=kind_of(std::string(reinterpret_cast<const char*>(name),len));

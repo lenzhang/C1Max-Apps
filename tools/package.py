@@ -42,7 +42,7 @@ for name in ids:
             digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     for filename in ['CMakeLists.txt','dependencies.json','archives.json']:
         digest.update((root/filename).read_bytes())
-    apps.append({'id':name,'version':'0.2.0' if name=='tox' else '0.1.0' if name=='appstore' else '0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
+    apps.append({'id':name,'version':'0.3.0' if name=='tox' else '0.1.0' if name=='appstore' else '0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
 catalog={'schema':1,'platform':'c1max-mipsel-linux','apps':apps}
 if not args.local:(root/'catalog.json').write_text(json.dumps(catalog,indent=2)+'\n')
 out=root/'.build/device'

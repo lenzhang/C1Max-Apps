@@ -2,7 +2,7 @@
 get_filename_component(C1_TOX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 include(${CMAKE_CURRENT_SOURCE_DIR}/dependencies.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/qr.cmake)
-add_library(c1tox STATIC src/engine.cpp src/files.cpp src/session.cpp)
+add_library(c1tox STATIC src/engine.cpp src/outbox.cpp src/files.cpp src/session.cpp)
 target_include_directories(c1tox PUBLIC src ${C1_TOX_ROOT}/shared ${C1_TOX_ROOT}/.build/include ${C1_TOX_ROOT}/.deps/c-toxcore)
 target_link_libraries(c1tox PUBLIC toxcore_static c1net pthread)
 add_library(c1toxmedia STATIC src/media.cpp ${C1_TOX_ROOT}/camera/src/album.cpp)

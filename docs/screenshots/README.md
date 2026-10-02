@@ -69,3 +69,7 @@
 `appstore.png` 与 `appstore-detail.png` 来自真机的隔离商店配置，展示按需安装目录和首页可见性控制。测试隐藏／卸载的是独立 QA 清单中的记录，没有删除用户资料。
 
 `appstore-installed.png` 是真机从公开 GitHub Release 下载并安装 Tox 0.2.0 后的详情页，使用同一隔离商店配置；不是电脑端界面预览。
+
+## Tox 离线队列（2026-10-02）
+
+`tox-outbox-chat.png` 和 `tox-outbox.png` 来自词典 framebuffer，展示实体键盘输入的离线消息，以及待发送／未确认项的不同操作。全部使用隔离双身份测试资料，不含真实联系人或私人聊天。截图只转换像素格式并旋转为正常屏幕方向。

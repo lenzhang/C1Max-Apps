@@ -24,10 +24,10 @@ lv_font_t*font=nullptr;
 std::unique_ptr<chat::Session>engine;
 std::unique_ptr<chat::Media>media;
 lv_image_dsc_t media_descriptor{};lv_obj_t*media_image=nullptr;
-size_t file_index=0;
-constexpr uint32_t nav_background=0x20100,nav_photo=0x20101,nav_voice=0x20102,nav_files=0x20103,nav_capture=0x20104,nav_play=0x20105,nav_retry=0x20106,nav_file_row=0x21000;
+size_t file_index=0,queue_index=0;int queue_confirm=0;uint64_t queue_target=0;
+constexpr uint32_t nav_background=0x20100,nav_photo=0x20101,nav_voice=0x20102,nav_files=0x20103,nav_capture=0x20104,nav_play=0x20105,nav_retry=0x20106,nav_queue=0x20107,nav_cancel_queued=0x20108,nav_resend=0x20109,nav_queue_yes=0x2010a,nav_queue_no=0x2010b,nav_queue_row=0x21100,nav_file_row=0x21000;
 chat::Snapshot view;
-enum class Page { Friends, Chat, Add, Profile, Rename, Requests, Delete, Scan, Files, Photo, Voice, Attachment };
+enum class Page { Friends, Chat, Add, Profile, Rename, Requests, Delete, Scan, Files, Photo, Voice, Attachment, Queue };
 Page page=Page::Friends,scan_origin=Page::Friends;
 std::unique_ptr<chat::Scanner>scanner;
 chat::ScanView scan_view;
@@ -59,7 +59,9 @@ void button(const char*t,int x,int y,int w,uint32_t k,bool active=false){
 }
 const chat::Friend*friend_now(){for(auto&f:view.friends)if(f.number==selected)return &f;return nullptr;}
 std::string tail(const std::string&s,size_t bytes){if(s.size()<=bytes)return s;size_t at=s.size()-bytes;while(at<s.size()&&(static_cast<unsigned char>(s[at])&0xc0)==0x80)at++;return "…"+s.substr(at);}
-std::string transfer_status(const std::string&s){if(s=="complete")return "已传输";if(s=="cancelled")return "已取消";if(s=="failed")return "失败";if(s=="waiting")return "等待接受";if(s=="receiving")return "接收中";return "未完成";}
+std::string transfer_status(const std::string&s){if(s=="queued")return "待发送";if(s=="sending")return "发送中";if(s=="unconfirmed")return "未确认";if(s=="complete")return "已传输";if(s=="cancelled")return "已取消";if(s=="failed")return "失败";if(s=="waiting")return "等待接受";if(s=="receiving")return "接收中";return "未完成";}
+std::vector<const chat::Message*> queue_items(){std::vector<const chat::Message*>v;for(auto&m:view.messages)if(m.mine&&m.id&&(m.state=="queued"||m.state=="unconfirmed"||m.state=="failed"))v.push_back(&m);return v;}
+std::string text_status(const std::string&s){if(s=="delivered")return "已送达";if(s=="sent")return "已发出";return transfer_status(s);}
 void erase_utf8(std::string&s){if(s.empty())return;size_t n=s.size()-1;while(n>0&&(static_cast<unsigned char>(s[n])&0xc0)==0x80)n--;s.erase(n);}
 void submit(chat::Command c){if(pending)return;c.token=++token;pending=c.token;pending_action=c.action;if(!engine->submit(c)){pending=0;notice="操作队列繁忙，请稍后再试";}}
 void open_chat(uint32_t n){if(pending)return;selected=n;page=Page::Chat;history_offset=0;engine->submit({chat::Action::Read,n});view=engine->snapshot(selected);paint();}
@@ -93,15 +95,15 @@ void paint(){
     label(r,"TOX",20,9,66,28,accent);label(r,view.name,90,10,182,24);
     label(r,view.status,278,10,225,24,view.online?accent:muted);
     button(view.background?"后台：开":"后台：关",509,4,147,nav_background,view.background);
-    button("我的 ID",668,4,118,nav_profile);
+    if(page==Page::Chat||page==Page::Queue)button(("队列 "+std::to_string(queue_items().size())).c_str(),668,4,118,nav_queue,page==Page::Queue);else button("我的 ID",668,4,118,nav_profile);
     std::string footer;
     if(page==Page::Friends||page==Page::Chat){
         sidebar();box(234,48,554,252);
         auto*f=friend_now();
         if(page==Page::Friends||!f){
             label(r,"与好友直接对话",256,70,490,28,accent);
-            label(r,"添加 Tox ID，或接受收到的好友请求。\n使用实体键盘输入，回车发送文字。\n双方在线时才能投递消息。",256,117,490,95);
-            label(r,"好友请求  "+std::to_string(view.requests.size()),256,220,240,25,muted);button("扫码添加",594,243,172,nav_scan);
+            label(r,"添加 Tox ID，或接受收到的好友请求。\n使用实体键盘输入，回车发送文字。\n离线消息先保存，上线后自动发送。",256,117,490,95);
+            label(r,"好友请求 "+std::to_string(view.requests.size())+" · 待发送 "+std::to_string(view.queued),256,220,240,25,muted);button("扫码添加",594,243,172,nav_scan);
             footer="W/S 选好友  ·  回车聊天  ·  I 我的 ID  ·  电源返回菜单";
         }else{
             label(r,f->name+(f->online?" · 在线":" · 离线"),250,59,188,25,accent);
@@ -116,13 +118,31 @@ void paint(){
             for(size_t i=begin;i<end;i++){
                 auto&m=view.messages[i];std::string prefix=m.mine?"我":"好友";
                 if(!m.file.empty())prefix+=" · "+transfer_status(m.state);
-                else if(m.mine)prefix+=m.state=="delivered"?" · 已送达":m.state=="sent"?" · 已发出":" · 未确认";
+                else if(m.mine)prefix+=" · "+text_status(m.state);
                 auto*o=lv_label_create(history);lv_label_set_text(o,(prefix+"\n"+m.text+(m.file.empty()?"":"  [点右上附件查看]")).c_str());lv_label_set_long_mode(o,LV_LABEL_LONG_MODE_WRAP);lv_obj_set_pos(o,10,y);lv_obj_set_width(o,505);lv_obj_set_style_text_font(o,font?font:LV_FONT_DEFAULT,0);lv_obj_set_style_text_color(o,lv_color_hex(m.mine?accent:ink),0);lv_obj_update_layout(o);y+=lv_obj_get_height(o)+14;
             }
             lv_obj_update_layout(history);if(!history_offset)lv_obj_scroll_to_y(history,lv_obj_get_scroll_bottom(history),LV_ANIM_OFF);
-            box(245,251,428,39,raised);label(r,drafts[selected].empty()?"输入文字…":tail(drafts[selected],92)+"_",257,259,401,26,drafts[selected].empty()?muted:ink);button(pending?"发送中":"发送",684,252,92,LV_KEY_ENTER,true);
+            box(245,251,428,39,raised);label(r,drafts[selected].empty()?"输入文字…":tail(drafts[selected],92)+"_",257,259,401,26,drafts[selected].empty()?muted:ink);button(pending?"保存中":"发送",684,252,92,LV_KEY_ENTER,true);
             footer="回车发文字  ·  拍摄键拍照  ·  点语音录音  ·  附件查看 / 接收";
         }
+    }else if(page==Page::Queue){
+        box(12,48,776,252);auto rows=queue_items();if(queue_index>=rows.size())queue_index=rows.empty()?0:rows.size()-1;
+        label(r,"待发送队列 · "+(friend_now()?friend_now()->name:std::string()),28,57,740,25,accent);
+        if(queue_confirm){
+            label(r,queue_confirm==2?"这条消息可能已被对方收到。\n确认重新发送吗？":"取消后不再自动发送这条消息。",30,108,734,90);
+            button("确认",428,249,160,nav_queue_yes,true);button("返回",604,249,164,nav_queue_no);
+        }else{
+            size_t start=queue_index/4*4;int y=91;
+            for(size_t i=start;i<rows.size()&&i<start+4;i++){auto&m=*rows[i];button((text_status(m.state)+" · "+m.text).c_str(),27,y,746,nav_queue_row+uint32_t(i),i==queue_index);y+=37;}
+            if(rows.empty())label(r,"没有待发送的消息。\n好友离线时发送的文字、照片和语音会保存在这里。",30,120,727,79,muted);
+            else{
+                auto&m=*rows[queue_index];button(m.state=="queued"?"取消待发":"不再重发",27,255,162,nav_cancel_queued);
+                if(m.state!="queued")button("重新发送",202,255,162,nav_resend,true);
+                label(r,std::to_string(queue_index+1)+" / "+std::to_string(rows.size()),580,261,68,24,muted);
+            }
+            button("返回聊天",657,255,116,screen::KEY_EXIT);
+        }
+        footer="W/S 选择 · 退格取消 · 待发送会上线自动投递；未确认需手动处理";
     }else if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){
         box(12,48,776,252);box(24,61,490,225,0x090f13);
         if(media){
@@ -180,7 +200,7 @@ void paint(){
         button(pending?"处理中":"回车确认",30,254,150,LV_KEY_ENTER,true);button("取消",661,254,111,screen::KEY_EXIT);if(page==Page::Add)button("扫码添加",194,254,149,nav_scan);
         footer=page==Page::Add?std::to_string(edit.size())+" / 76  ·  Shift + Q–P 输入数字  ·  退格删除":"双击 Shift 切换大写  ·  退格删除  ·  返回取消";
     }else if(page==Page::Requests){
-        box(12,48,776,252);label(r,"好友请求  "+std::to_string(view.requests.size()),30,63,700,26,accent);
+        box(12,48,776,252);label(r,"好友请求 "+std::to_string(view.requests.size())+" · 待发送 "+std::to_string(view.queued),30,63,700,26,accent);
         if(view.requests.empty())label(r,"没有待处理请求。\n新请求会出现在这里，接受后才能聊天。",30,119,730,85,muted);
         else{request_index=std::min(request_index,view.requests.size()-1);auto&q=view.requests[request_index];label(r,q.key.substr(0,32)+"\n"+q.key.substr(32),30,102,730,57);label(r,q.message,30,170,730,62);button("回车接受",30,251,147,LV_KEY_ENTER,true);button("退格拒绝",189,251,147,LV_KEY_BACKSPACE);label(r,std::to_string(request_index+1)+" / "+std::to_string(view.requests.size()),664,257,96,28,muted);}
         footer="W/S 切换请求  ·  接受后加入好友  ·  返回键回到好友";
@@ -195,10 +215,25 @@ void key(uint32_t k){
     dismissed_error=view.error_count;
     if(k==screen::KEY_HOME){screen::quit=true;return;}
     if(k==screen::KEY_MODE)return;
-    if(k==screen::KEY_EXIT){if(pending)return;if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){bool attachment=page==Page::Attachment;stop_media();page=attachment?Page::Files:Page::Chat;}else if(page==Page::Files){page=Page::Chat;}else if(page==Page::Scan){stop_scan();page=scan_origin;}else page=Page::Friends;notice.clear();paint();return;}
+    if(k==screen::KEY_EXIT){if(pending)return;if(page==Page::Photo||page==Page::Voice||page==Page::Attachment){bool attachment=page==Page::Attachment;stop_media();page=attachment?Page::Files:Page::Chat;}else if(page==Page::Files||page==Page::Queue){if(page==Page::Queue&&queue_confirm)queue_confirm=0;else page=Page::Chat;}else if(page==Page::Scan){stop_scan();page=scan_origin;}else page=Page::Friends;notice.clear();paint();return;}
     if(pending)return;
     notice.clear();
     if(k==nav_background){submit({chat::Action::Background,0,view.background?"0":"1"});paint();return;}
+    if(k==nav_queue&&(page==Page::Chat||page==Page::Queue)){page=Page::Queue;queue_confirm=0;queue_index=0;paint();return;}
+    if(page==Page::Queue){
+        auto rows=queue_items();if(queue_index>=rows.size())queue_index=rows.empty()?0:rows.size()-1;
+        if(queue_confirm){
+            if(k==nav_queue_no||k=='n')queue_confirm=0;
+            else if(k==nav_queue_yes||k==LV_KEY_ENTER||k=='y'){submit({queue_confirm==2?chat::Action::RetryQueued:chat::Action::CancelQueued,selected,std::to_string(queue_target)});queue_confirm=0;}
+        }else if(!rows.empty()){
+            if(k>=nav_queue_row&&k<nav_queue_row+128)queue_index=std::min<size_t>(k-nav_queue_row,rows.size()-1);
+            else if(k=='w'||k==LV_KEY_UP)queue_index=(queue_index+rows.size()-1)%rows.size();
+            else if(k=='s'||k==LV_KEY_DOWN)queue_index=(queue_index+1)%rows.size();
+            else if(k==nav_cancel_queued||k==LV_KEY_BACKSPACE){queue_target=rows[queue_index]->id;queue_confirm=1;}
+            else if((k==nav_resend||k==LV_KEY_ENTER)&&rows[queue_index]->state!="queued"){queue_target=rows[queue_index]->id;queue_confirm=2;}
+        }
+        paint();return;
+    }
     try {
         if((k==nav_photo||k==nav_voice||(k==screen::KEY_SYMBOL&&page==Page::Chat))&&friend_now()){
             stop_scan();stop_media();media=std::make_unique<chat::Media>(c1::data()+"/tox/media");
@@ -289,9 +324,11 @@ int main(int argc,char**argv){
         if(screen::tick()-last>=100){last=screen::tick();auto next=engine->snapshot(selected);bool dirty=next.revision!=view.revision;view=std::move(next);
             if(selected==UINT32_MAX&&!view.friends.empty())selected=view.friends.front().number;
             if(pending&&view.completed==pending){pending=0;dirty=true;if(view.command_ok){
-                if(pending_action==chat::Action::Send){drafts[selected].clear();history_offset=0;}
-                else if(pending_action==chat::Action::SendFile){stop_media();page=Page::Files;file_index=0;notice="附件请求已发送，等待对方接受";}
+                if(pending_action==chat::Action::Send){drafts[selected].clear();history_offset=0;notice=view.background?"已保存，上线后自动发送":"已保存；离开应用后继续补发需开启后台";}
+                else if(pending_action==chat::Action::SendFile){stop_media();page=Page::Files;file_index=0;notice="附件已保存；上线后自动发出请求，仍需对方接受";}
                 else if(pending_action==chat::Action::Background){notice=view.background?"已开启后台：退出后继续收信；重启后需打开一次 Tox":"已关闭后台：退出后停止收信";}
+                else if(pending_action==chat::Action::CancelQueued)notice="已取消自动发送，聊天记录保留";
+                else if(pending_action==chat::Action::RetryQueued)notice="已重新加入待发队列";
                 else if(pending_action==chat::Action::Rename)page=Page::Profile;
                 else if(pending_action==chat::Action::Add){page=Page::Friends;notice="好友请求已提交，等待对方接受";}
                 else if(pending_action==chat::Action::Delete){drafts.erase(selected);selected=UINT32_MAX;page=Page::Friends;}

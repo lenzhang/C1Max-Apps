@@ -25,16 +25,16 @@ sockaddr_un address(const std::string&directory){sockaddr_un a{};a.sun_family=AF
 void timeouts(int fd){timeval t{1,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&t,sizeof t);setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&t,sizeof t);}
 int connect_service(const std::string&d){auto a=address(d);int fd=socket(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0);if(fd<0)return -1;timeouts(fd);if(connect(fd,reinterpret_cast<sockaddr*>(&a),sizeof a)){close(fd);return -1;}return fd;}
 Json pack(const Snapshot&s){
-    Json j={{"revision",s.revision},{"error_count",s.error_count},{"completed",s.completed},{"command_ok",s.command_ok},{"id",s.id},{"name",s.name},{"status",s.status},{"error",s.error},{"dht_key",s.dht_key},{"udp_port",s.udp_port},{"ready",s.ready},{"online",s.online},{"background",s.background},{"friends",Json::array()},{"requests",Json::array()},{"messages",Json::array()},{"transfers",Json::array()}};
+    Json j={{"revision",s.revision},{"error_count",s.error_count},{"completed",s.completed},{"command_ok",s.command_ok},{"id",s.id},{"name",s.name},{"status",s.status},{"error",s.error},{"dht_key",s.dht_key},{"udp_port",s.udp_port},{"ready",s.ready},{"online",s.online},{"background",s.background},{"queued",s.queued},{"friends",Json::array()},{"requests",Json::array()},{"messages",Json::array()},{"transfers",Json::array()}};
     for(auto&f:s.friends)j["friends"].push_back({{"number",f.number},{"key",f.key},{"name",f.name},{"online",f.online},{"unread",f.unread}});
     for(auto&r:s.requests)j["requests"].push_back({{"key",r.key},{"message",r.message}});
-    for(auto&m:s.messages)j["messages"].push_back({{"text",m.text},{"state",m.state},{"mine",m.mine},{"receipt",m.receipt},{"file",m.file},{"kind",m.kind},{"size",m.size}});
+    for(auto&m:s.messages)j["messages"].push_back({{"text",m.text},{"state",m.state},{"mine",m.mine},{"receipt",m.receipt},{"file",m.file},{"kind",m.kind},{"size",m.size},{"id",m.id}});
     for(auto&t:s.transfers)j["transfers"].push_back({{"id",t.id},{"number",t.number},{"file_number",t.file_number},{"size",t.size},{"done",t.done},{"mine",t.mine},{"name",t.name},{"file",t.file},{"kind",t.kind},{"state",t.state}});return j;
 }
-Snapshot unpack(const Json&j){Snapshot s;s.revision=j.at("revision");s.error_count=j.at("error_count");s.completed=j.at("completed");s.command_ok=j.at("command_ok");s.id=j.at("id");s.name=j.at("name");s.status=j.at("status");s.error=j.at("error");s.dht_key=j.at("dht_key");s.udp_port=j.at("udp_port");s.ready=j.at("ready");s.online=j.at("online");s.background=j.at("background");
+Snapshot unpack(const Json&j){Snapshot s;s.revision=j.at("revision");s.error_count=j.at("error_count");s.completed=j.at("completed");s.command_ok=j.at("command_ok");s.id=j.at("id");s.name=j.at("name");s.status=j.at("status");s.error=j.at("error");s.dht_key=j.at("dht_key");s.udp_port=j.at("udp_port");s.ready=j.at("ready");s.online=j.at("online");s.background=j.at("background");s.queued=j.value("queued",0u);
     for(auto&f:j.at("friends"))s.friends.push_back({f.at("number"),f.at("key"),f.at("name"),f.at("online"),f.at("unread")});
     for(auto&r:j.at("requests"))s.requests.push_back({r.at("key"),r.at("message")});
-    for(auto&m:j.at("messages"))s.messages.push_back({m.at("text"),m.at("state"),m.at("mine"),m.at("receipt"),m.at("file"),m.at("kind"),m.at("size")});
+    for(auto&m:j.at("messages"))s.messages.push_back({m.at("text"),m.at("state"),m.at("mine"),m.at("receipt"),m.at("file"),m.at("kind"),m.at("size"),m.value("id",uint64_t(0))});
     for(auto&t:j.at("transfers"))s.transfers.push_back({t.at("id"),t.at("number"),t.at("file_number"),t.at("size"),t.at("done"),t.at("mine"),t.at("name"),t.at("file"),t.at("kind"),t.at("state")});return s;
 }
 void start_service(const std::string&d,const std::string&nodes,const std::string&program){
@@ -63,7 +63,7 @@ int run_service(const std::string&d,const std::string&nodes){
             for(size_t i=clients.size();i>0;i--)if(polls[i].revents){int fd=clients[i-1];try{
                 auto req=receive(fd);if(req.value("stop",false)){service_stop=1;send_json(fd,{{"stopping",true}});continue;}
                 auto commands=req.at("commands");if(!commands.is_array()||commands.size()>16)throw std::runtime_error("Invalid commands");
-                for(auto&c:commands){int a=c.at("action");if(a<0||a>int(Action::Background))throw std::runtime_error("Invalid action");Command cmd{Action(a),c.at("number"),c.at("text"),c.at("extra"),c.at("port"),c.at("token")};if(!engine.submit(cmd))throw std::runtime_error("Tox command queue unavailable");}
+                for(auto&c:commands){int a=c.at("action");if(a<0||a>int(Action::RetryQueued))throw std::runtime_error("Invalid action");Command cmd{Action(a),c.at("number"),c.at("text"),c.at("extra"),c.at("port"),c.at("token")};if(!engine.submit(cmd))throw std::runtime_error("Tox command queue unavailable");}
                 send_json(fd,pack(engine.snapshot(req.value("friend",UINT32_MAX))));
             }catch(...){close(fd);clients.erase(clients.begin()+i-1);}}
             if(polls[0].revents&POLLIN){int fd=accept4(server,nullptr,nullptr,SOCK_CLOEXEC);if(fd>=0){if(clients.size()>=4)close(fd);else{timeouts(fd);clients.push_back(fd);}}}

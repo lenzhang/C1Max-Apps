@@ -17,6 +17,7 @@ apps/
 ├── processing/     QuickJS 绘图、四个官方示例改编与物理键盘编辑
 ├── hidpilot/       USB 键鼠与触控板
 ├── moonpilot/      Moonlight 远程桌面、AI 操作与语音对话
+├── tox/            Tox 点对点文字聊天、ID 二维码与摄像头扫码添加
 ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
 ├── airtune/        Radio-Browser 网络电台目录、复古收音机界面
 ├── crosspoint/     本地电子书与 OPDS/Calibre 书目浏览
@@ -37,6 +38,7 @@ apps/
 
 ## 新增应用
 
+- **[Tox 聊天](tox/README.md)**：基于 c-toxcore 的原生点对点文字聊天，支持好友请求、送达回执、本地记录、显示自己的 ID 二维码和摄像头扫码添加。扫码提供数码裁剪与对焦；身份保存保留上一份有效快照。默认构建已包含，身份与聊天数据不随源码发布。
 - **[设置](settings/README.md)**：左侧分类、右侧列表，W/S 选择、A/D 调节，触摸可整行点击并有大号 −／+ 和选项列表。WLAN 非阻塞扫描、连接结果与密码错误提示、隐藏网络、忘记网络；屏幕亮度、自动熄屏、媒体音量、USB ADB/MTP 切换（需确认）、无线调试、电池和本机信息。不提供关机、恢复出厂和蓝牙。
 - **[HID 键鼠](hidpilot/README.md)**：USB HID 与 ADB / MTP 共存，触控板、实体键盘、修饰键和滚轮控制电脑。0.2.0 起专注手动输入。
 - **[MoonPilot AI](moonpilot/README.md)**：独立的 Moonlight / Sunshine 远程操作应用，包含手动添加主机、PIN 配对、桌面预览、模型单步／十步操作，以及可配置 ASR、对话和 TTS。配对协议回归与真机解码通过；真实 Sunshine 串流和 AI 闭环待主机接入后验证。
@@ -99,6 +101,12 @@ apps/
   </tr>
 </table>
 
+| Tox 聊天 | Tox 扫码添加 |
+| --- | --- |
+| [![Tox 真机两个测试身份的聊天记录](docs/screenshots/tox.png)](docs/screenshots/tox.png) | [![Tox 真机识别专用测试二维码后的确认页](docs/screenshots/tox-qr-confirm.png)](docs/screenshots/tox-qr-confirm.png) |
+
+Tox 截图使用专用测试身份；功能、按键与验证范围见 [Tox 说明](tox/README.md)。
+
 ## 构建、同步与启动
 
 可独立克隆此仓库；在主仓库中它位于 `apps/` submodule。以下命令从本仓库根目录执行（在主仓库先 `cd apps`）。
@@ -132,6 +140,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 │   ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
 │   ├── hidpilot/{c1max-hidpilot,c1max-hidpilot-usb}
 │   ├── moonpilot/c1max-moonpilot
+│   ├── tox/{c1max-tox,bootstrap.json,licenses/}
 │   ├── airtune/c1max-airtune
 │   ├── crosspoint/c1max-crosspoint
 │   ├── camera/c1max-camera
@@ -152,6 +161,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
     ├── bilibili/       B 站热门、搜索、分 P、扫码登录与 360p MP4 直连播放
     ├── hidpilot/      USB 运行日志与旧版私有设置
     ├── moonpilot/     模型设置、主机配对证书（0600）
+    ├── tox/           身份私钥及备份、好友和聊天记录（0600）
     ├── airtune/       本地电台列表与分类缓存
     ├── crosspoint/    books/ 本地书籍、OPDS 服务器与字号设置
     ├── camera/        photos/ 拍摄照片、画幅/滤镜/相纸设置

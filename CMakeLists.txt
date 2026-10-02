@@ -151,6 +151,8 @@ add_executable(c1max-moonpilot-frame-test EXCLUDE_FROM_ALL moonpilot/tests/frame
 target_include_directories(c1max-moonpilot-frame-test PRIVATE streamplayer/src)
 target_compile_options(c1max-moonpilot-frame-test PRIVATE -UNDEBUG)
 
+add_subdirectory(tox)
+
 # Optional applications stay local; a clean checkout builds only public apps.
 option(C1_BUILD_LOCAL_APPS "Build applications from ignored local configuration" OFF)
 if(C1_BUILD_LOCAL_APPS)

@@ -3,7 +3,7 @@
 import argparse, hashlib, json, pathlib, runpy, shutil, subprocess
 from PIL import Image, ImageOps
 root=pathlib.Path(__file__).resolve().parents[1]
-ids=['launcher','piano','nes','streamplayer','calendar','calculator','settings','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot']
+ids=['launcher','piano','nes','streamplayer','calendar','calculator','settings','terminal','gomoku','pcsx4all','processing','dosbox','airtune','crosspoint','camera','mail','bilibili','hidpilot','moonpilot','tox']
 parser=argparse.ArgumentParser()
 parser.add_argument('--local',action='store_true',help='Apply ignored config/package.local.py to the device payload')
 parser.add_argument('--source-list',type=pathlib.Path,help='NUL-separated git ls-files output from the host for container builds')
@@ -39,7 +39,7 @@ for name in ids:
             digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     for filename in ['CMakeLists.txt','dependencies.json','archives.json']:
         digest.update((root/filename).read_bytes())
-    apps.append({'id':name,'version':'0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
+    apps.append({'id':name,'version':'0.1.3' if name=='tox' else '0.2.0' if name=='hidpilot' else '0.3.1' if name=='crosspoint' else '0.3.0' if name=='calendar' else '0.1.2' if name=='dosbox' else '0.1.1' if name=='pcsx4all' else '0.1.0' if name in ['terminal','gomoku','processing','moonpilot'] else '0.2.0','revision':digest.hexdigest()})
 catalog={'schema':1,'platform':'c1max-mipsel-linux','apps':apps}
 if not args.local:(root/'catalog.json').write_text(json.dumps(catalog,indent=2)+'\n')
 out=root/'.build/device'
@@ -92,6 +92,9 @@ shutil.copytree(root/'hidpilot/licenses',out/'hidpilot/licenses')
 shutil.copy2(root/'hidpilot/README.md',out/'hidpilot')
 shutil.copytree(root/'moonpilot/licenses',out/'moonpilot/licenses')
 shutil.copy2(root/'moonpilot/README.md',out/'moonpilot')
+shutil.copytree(root/'tox/licenses',out/'tox/licenses')
+for name in ['bootstrap.json','README.md']:
+    shutil.copy2(root/'tox'/name,out/'tox'/name)
 shutil.copytree(root/'camera/licenses',out/'camera/licenses')
 shutil.copytree(root/'camera/assets',out/'camera/assets')
 shutil.copytree(tool_payload,out/'linux-tools')

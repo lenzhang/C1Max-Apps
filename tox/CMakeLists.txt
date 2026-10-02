@@ -1,0 +1,11 @@
+# Share this dependency setup with the standalone host integration tests.
+get_filename_component(C1_TOX_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+include(${CMAKE_CURRENT_SOURCE_DIR}/dependencies.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/qr.cmake)
+add_library(c1tox STATIC src/engine.cpp)
+target_include_directories(c1tox PUBLIC src ${C1_TOX_ROOT}/shared ${C1_TOX_ROOT}/.build/include ${C1_TOX_ROOT}/.deps/c-toxcore)
+target_link_libraries(c1tox PUBLIC toxcore_static c1net pthread)
+add_executable(c1max-tox src/main.cpp ${C1_TOX_ROOT}/shared/display.cpp ${C1_TOX_ROOT}/shared/keyboard.cpp)
+target_include_directories(c1max-tox PRIVATE ${C1_TOX_ROOT}/.deps/lvgl/src/libs/tiny_ttf)
+target_link_libraries(c1max-tox c1tox c1toxqr lvgl m)
+set_target_properties(c1max-tox PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

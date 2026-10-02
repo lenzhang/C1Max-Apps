@@ -2,7 +2,7 @@
   "schema": 1,
   "platform": "c1max-mipsel-linux",
   "runtime": 1,
-  "release": "apps-20261002-media-store",
+  "release": "apps-20261002-tox-outbox",
   "apps": [
     {
       "id": "piano",
@@ -204,14 +204,14 @@
     },
     {
       "id": "tox",
-      "version": "0.2.0",
-      "revision": "a43ecd874d7addc0b841393bca4a06213d9c50ba867539e42414b7b6bd997720",
+      "version": "0.3.0",
+      "revision": "73e8b7c60b57b163aa9efeb70366da7b444be0b8cb31643e5e04faef5e57667d",
       "title": "Tox 聊天",
       "description": "Tox 聊天 · C1 Max 原生应用",
-      "url": "https://github.com/zhuzhe1983/C1Max-Apps/releases/download/apps-20261002-media-store/tox-0.2.0-a43ecd874d7a.c1pkg",
-      "size": 3100645,
-      "unpacked": 3098599,
-      "sha256": "a5091360c4ae03d0735008791ef76342648db94db03b7c6550480bfc8c0c0309"
+      "url": "https://github.com/zhuzhe1983/C1Max-Apps/releases/download/apps-20261002-tox-outbox/tox-0.3.0-73e8b7c60b57.c1pkg",
+      "size": 3138569,
+      "unpacked": 3136523,
+      "sha256": "ec9e7026bebe052c26cd556f0dac126b11536a32c440418ab790f31d6aed6b8d"
     },
     {
       "id": "appstore",

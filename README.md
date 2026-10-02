@@ -126,7 +126,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 /storage/apps/
 ├── current -> releases/<时间-校验值>/
 ├── releases/<版本>/
-│   ├── launcher/{c1max-launcher,run.sh,apps.txt,icons/,manifest.json}
+│   ├── launcher/{c1max-launcher,run.sh,apps.txt,desktop-service.sh,icons/,manifest.json}
 │   ├── streamplayer/c1max-streamplayer
 │   ├── calendar/c1max-calendar
 │   ├── calculator/c1max-calculator

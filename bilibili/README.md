@@ -62,6 +62,8 @@ C1_APPS_ROOT=/work/.build/device C1_APPS_DATA=/work/.runtime/bilibili-qa qemu-mi
 
 ## 设备截图
 
+0.2.0 增加竖屏播放：控件和文字一起右转，控制区在设备横放时的左侧；切换视频不返回列表，开始播放后隐藏控件。
+
 ![联网热门视频](../docs/screenshots/bilibili.png)
 
 ![未转码视频的网络播放](../docs/screenshots/bilibili-playback.png)

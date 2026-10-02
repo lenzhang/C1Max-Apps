@@ -10,6 +10,7 @@ apps/
 ├── terminal/       PTY / ANSI / UTF-8 终端、物理控制键
 ├── linux-tools/    独立 bash / less / nano / SSH 客户端工具包
 ├── calculator/     四则运算、括号、乘方、小数
+├── settings/       WLAN、亮度/熄屏、音量、USB、无线调试、电池与本机信息
 ├── gomoku/         人机／双人五子棋、悔棋和自动续局
 ├── pcsx4all/       PS1 模拟器、游戏库、即时存档（自备游戏）
 ├── dosbox/         DOS 游戏库、命令行与实体键盘（解释器）
@@ -36,6 +37,7 @@ apps/
 
 ## 新增应用
 
+- **[设置](settings/README.md)**：左侧分类、右侧列表，W/S 选择、A/D 调节，触摸可整行点击并有大号 −／+ 和选项列表。WLAN 非阻塞扫描、连接结果与密码错误提示、隐藏网络、忘记网络；屏幕亮度、自动熄屏、媒体音量、USB ADB/MTP 切换（需确认）、无线调试、电池和本机信息。不提供关机、恢复出厂和蓝牙。
 - **[HID 键鼠](hidpilot/README.md)**：USB HID 与 ADB / MTP 共存，触控板、实体键盘、修饰键和滚轮控制电脑。0.2.0 起专注手动输入。
 - **[MoonPilot AI](moonpilot/README.md)**：独立的 Moonlight / Sunshine 远程操作应用，包含手动添加主机、PIN 配对、桌面预览、模型单步／十步操作，以及可配置 ASR、对话和 TTS。配对协议回归与真机解码通过；真实 Sunshine 串流和 AI 闭环待主机接入后验证。
 
@@ -91,15 +93,11 @@ apps/
     <td><strong>HIDPilot 键鼠</strong><br><a href="docs/screenshots/hidpilot.png"><img src="docs/screenshots/hidpilot.png" alt="HIDPilot 真机触控板、实体键盘修饰键和 USB 状态" width="400"></a><br>USB HID 与 ADB 共存；<a href="hidpilot/README.md">使用说明</a>。</td>
     <td><strong>MoonPilot AI</strong><br><a href="docs/screenshots/moonpilot.png"><img src="docs/screenshots/moonpilot.png" alt="MoonPilot 真机 Sunshine 主机配置界面" width="400"></a><br>主机设置、PIN 配对和模型接口；真实 Sunshine 串流待接入验证。</td>
   </tr>
+  <tr>
+    <td><strong>设置</strong><br><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="设置的显示与熄屏页，亮度条两侧有减号和加号按钮" width="400"></a><br>分类栏与可触摸的亮度 −／+；<a href="settings/README.md">按键与功能说明</a>。</td>
+    <td><strong>设置 · 添加网络</strong><br><a href="docs/screenshots/settings-wifi-add.png"><img src="docs/screenshots/settings-wifi-add.png" alt="设置添加隐藏网络页，网络名称与隐藏的密码输入框" width="400"></a><br>实体键盘输入，拍照键显示密码，连接结果在底栏提示。</td>
+  </tr>
 </table>
-
-0.2.0 增加竖屏播放：控件和文字一起右转，控制区在设备横放时的左侧；切换视频不返回列表，开始播放后隐藏控件。
-
-| 竖屏控件（设备横放方向） | 切换视频后的画面 |
-| --- | --- |
-| ![Bilibili 竖屏播放与左侧控件](docs/screenshots/bilibili-portrait.png) | ![新视频开始后隐藏控件](docs/screenshots/bilibili-next-hidden.png) |
-
-[查看竖握方向的截图](docs/screenshots/bilibili-portrait-upright.png) · [竖屏分类](docs/screenshots/bilibili-portrait-list.png)
 
 ## 构建、同步与启动
 
@@ -124,6 +122,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 │   ├── streamplayer/c1max-streamplayer
 │   ├── calendar/c1max-calendar
 │   ├── calculator/c1max-calculator
+│   ├── settings/c1max-settings
 │   ├── terminal/{c1max-terminal,assets/}
 │   ├── linux-tools/{bin/,share/}
 │   ├── gomoku/c1max-gomoku
@@ -159,6 +158,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
     ├── mail/          邮箱服务器及认证信息（0600）
     ├── default-servers.json  单独部署的私有默认服务器（0600）
     ├── calculator/
+    ├── settings/      brightness 亮度（c1max-volume 唤醒时读取）
     └── nes/roms/      自备合法 .nes 文件
 ```
 

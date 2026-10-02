@@ -29,7 +29,27 @@ static VideoLayout video_layout;
 static ScreenOrientation orientation;
 static int video_width=0,video_height=0,video_aspect_n=1,video_aspect_d=1;
 static constexpr int native_width=340,native_height=800;
-uint32_t take_key(){return keyboard::take();}
+static lv_obj_t *caps_notice=nullptr;
+static uint32_t caps_notice_until=0;
+uint32_t take_key(){
+    if(caps_notice&&int32_t(tick()-caps_notice_until)>=0){lv_obj_delete(caps_notice);caps_notice=nullptr;}
+    auto code=keyboard::take();
+    if(code==KEY_MODE&&lv_display_get_default()){
+        if(!caps_notice){
+            caps_notice=lv_label_create(lv_layer_top());
+            lv_obj_remove_flag(caps_notice,LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_style_text_font(caps_notice,&lv_font_montserrat_18,0);
+            lv_obj_set_style_text_color(caps_notice,lv_color_hex(0xf2f8f7),0);
+            lv_obj_set_style_bg_color(caps_notice,lv_color_hex(0x205d67),0);
+            lv_obj_set_style_bg_opa(caps_notice,LV_OPA_COVER,0);
+            lv_obj_set_style_pad_hor(caps_notice,14,0);lv_obj_set_style_pad_ver(caps_notice,8,0);
+            lv_obj_set_style_radius(caps_notice,9,0);
+        }
+        lv_label_set_text(caps_notice,keyboard::caps_lock()?"ABC":"abc");
+        lv_obj_align(caps_notice,LV_ALIGN_TOP_RIGHT,-12,12);caps_notice_until=tick()+1500;
+    }
+    return code;
+}
 bool caps_lock(){return keyboard::caps_lock();}
 
 bool video_begin(){
@@ -152,6 +172,7 @@ bool open(){
     auto indev=lv_indev_create();lv_indev_set_type(indev,LV_INDEV_TYPE_POINTER);lv_indev_set_read_cb(indev,input);return true;
 }
 void close(){
+    if(caps_notice){lv_obj_delete(caps_notice);caps_notice=nullptr;}
     video_end();keyboard::close();
     if(memory)munmap(memory,length);
     if(fb>=0)::close(fb);if(touch>=0)::close(touch);if(key>=0)::close(key);

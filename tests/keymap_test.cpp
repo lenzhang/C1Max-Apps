@@ -32,5 +32,17 @@ int main(){
     k.reset();assert(k.event(115,1,1)==0);k.event(42,1,2);
     assert(k.event(115,1,3)==keyboard::FontUp);assert(k.event(114,2,4)==keyboard::FontDown);
     assert(k.event(42,0,5)==0);k.event(42,1,6);assert(k.event(42,0,7)==0);assert(!k.caps_lock());
+    // Normal human tap timing: the second release may be >350 ms later.
+    k.reset();k.event(42,1,0);k.event(42,0,180);k.event(42,1,600);
+    assert(k.event(42,0,790)==keyboard::Mode);assert(k.event(30,1,800)=='A');
+    k.event(42,1,900);k.event(42,0,1000);k.event(42,1,1400);
+    assert(k.event(42,0,1520)==keyboard::Mode);assert(k.event(30,1,1530)=='a');
+    k.reset();k.event(42,1,0);k.event(42,0,100);k.event(42,1,601);
+    assert(k.event(42,0,700)==0);assert(!k.caps_lock()); // gap is too long
+    k.reset();k.event(42,1,0);k.event(42,0,100);k.event(42,1,200);
+    assert(k.event(42,0,601)==0);assert(!k.caps_lock()); // second press held too long
+    k.reset();k.event(42,1,0);k.event(42,0,100);k.event(42,1,200);
+    k.event(42,2,300);assert(k.event(42,0,350)==keyboard::Mode);
+    assert(k.event(42,0,360)==0);assert(k.caps_lock()); // repeat/duplicate releases
     puts("keymap: right-side roles, caps latch, Shift symbols, repeat and event loss PASS");
 }

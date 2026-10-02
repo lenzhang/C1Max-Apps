@@ -8,25 +8,31 @@ namespace keyboard {
 constexpr uint32_t Back=0x10000, Symbol=0x10001, Home=0x10002, Mode=0x10003, HomeLong=0x10004;
 constexpr uint32_t FontDown=0x10005,FontUp=0x10006;
 class Keymap {
-    bool held_[2]={false,false}, used_=false, caps_=false, tap_=false;
+    bool held_[2]={false,false}, used_=false, caps_=false, tap_=false, second_tap_=false;
     uint64_t down_=0, released_=0;
     PowerHold power_;
 public:
     bool caps_lock() const { return caps_; }
     void reset() { *this=Keymap{}; }
-    void lost_events() { held_[0]=held_[1]=false; used_=true; tap_=false; power_.reset(); }
+    void lost_events() { held_[0]=held_[1]=false; used_=true; tap_=second_tap_=false; power_.reset(); }
     uint32_t tick(uint64_t ms) { return power_.tick(ms)==PowerHold::Exit?HomeLong:0; }
     uint32_t event(unsigned code,int value,uint64_t ms) {
         if(code==116){auto action=power_.event(value,ms);return action==PowerHold::Hint?Home:action==PowerHold::Exit?HomeLong:0;}
         if(code==42||code==54) {
             unsigned i=code==54;
-            if(value==1) { if(!held_[0]&&!held_[1]) { used_=false; down_=ms; } held_[i]=true; }
+            if(value==1) { if(!held_[0]&&!held_[1]) {
+                // Measure the gap to the second PRESS, not its release. The
+                // previous 350 ms release-to-release test counted tap duration
+                // against the gap and rejected ordinary deliberate double taps.
+                second_tap_=tap_&&ms>=released_&&ms-released_<=500;
+                used_=false; down_=ms;
+            } held_[i]=true; }
             else if(value==0&&held_[i]) {
                 held_[i]=false;
                 if(!held_[0]&&!held_[1]) {
-                    bool short_tap=!used_&&ms>=down_&&ms-down_<=350;
-                    if(short_tap&&tap_&&ms>=released_&&ms-released_<=350) {
-                        caps_=!caps_; tap_=false; return Mode;
+                    bool short_tap=!used_&&ms>=down_&&ms-down_<=400;
+                    if(short_tap&&second_tap_) {
+                        caps_=!caps_; tap_=second_tap_=false; return Mode;
                     }
                     tap_=short_tap; released_=ms;
                 }
@@ -34,7 +40,7 @@ public:
             return 0;
         }
         if(value!=1&&value!=2)return 0;
-        used_=true; tap_=false;
+        used_=true; tap_=second_tap_=false;
         if((held_[0]||held_[1])&&(code==114||code==115))return code==115?FontUp:FontDown;
         uint32_t key=0;
         if(code>=16&&code<=25) key="qwertyuiop"[code-16];

@@ -30,6 +30,13 @@ void save_private(const std::string&p,const std::string&s){
     size_t off=0; while(off<s.size()){ssize_t w=write(fd,s.data()+off,s.size()-off);if(w<=0){close(fd);unlink(n.data());throw std::runtime_error("Cannot save configuration");}off+=w;}
     if(fsync(fd)<0){close(fd);unlink(n.data());throw std::runtime_error("Cannot sync configuration");}close(fd);
     if(rename(n.data(),p.c_str())){unlink(n.data());throw std::runtime_error("Cannot replace configuration");}
+    // Persist the rename as well as the file contents (e.g. identity/config
+    // files must survive a power loss immediately after a successful save).
+    auto slash=p.find_last_of('/');std::string parent=slash==std::string::npos?".":slash==0?"/":p.substr(0,slash);
+    int dir=open(parent.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);
+    if(dir<0)throw std::runtime_error("Cannot open configuration directory");
+    int synced;do{synced=fsync(dir);}while(synced<0&&errno==EINTR);
+    close(dir);if(synced<0)throw std::runtime_error("Cannot sync configuration directory");
 }
 std::string encode(const std::string&s){std::string o;const char*h="0123456789ABCDEF";for(unsigned char c:s){if(isalnum(c)||c=='-'||c=='_'||c=='.'||c=='~')o+=c;else{o+='%';o+=h[c>>4];o+=h[c&15];}}return o;}
 std::string origin(const std::string&u){

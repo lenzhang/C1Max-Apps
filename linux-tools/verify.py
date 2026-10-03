@@ -24,7 +24,7 @@ def mips(name, *args, **kwargs):
 
 
 report = {'target': 'MIPS32r2 little-endian, o32, static glibc', 'binaries': {}, 'checks': []}
-for name in ('bash', 'less', 'nano', 'dbclient', 'dropbearkey'):
+for name in ('bash', 'less', 'nano', 'dbclient', 'dropbearkey', 'scp', 'curl'):
     binary = BIN / name
     header = run(['mipsel-linux-gnu-readelf', '-h', str(binary)])
     program = run(['mipsel-linux-gnu-readelf', '-l', str(binary)])
@@ -34,16 +34,17 @@ for name in ('bash', 'less', 'nano', 'dbclient', 'dropbearkey'):
     assert 'INTERP' not in program and '(NEEDED)' not in dynamic, name
     report['binaries'][name] = {'bytes': binary.stat().st_size,
                                 'sha256': hashlib.sha256(binary.read_bytes()).hexdigest()}
-report['checks'].append('All 5 executables are ELF32 little-endian MIPS32r2/o32 without PT_INTERP or DT_NEEDED')
+report['checks'].append('All 7 executables are ELF32 little-endian MIPS32r2/o32 without PT_INTERP or DT_NEEDED')
 assert 'version 5.3.20' in mips('bash', '--version')
 assert 'less 710' in mips('less', '--version')
 assert 'version 9.2' in mips('nano', '--version')
 assert '2026.94' in mips('dbclient', '-V')
+assert 'curl 8.22.0' in mips('curl', '--version')
 assert mips('bash', '--noprofile', '--norc', '-c',
             'a=(zero one two); [[ ${a[1]} == one ]] || exit 1; '
             'f() { local n=$1; printf "%s:%s\\n" "$n" "$((3 * 7))"; }; f ok') == 'ok:21\n'
 assert mips('less', input='C1Max pager smoke test\nsecond line\n') == 'C1Max pager smoke test\nsecond line\n'
-report['checks'].append('QEMU: versions, Bash arrays/functions/arithmetic, less pipe passthrough')
+report['checks'].append('QEMU: versions, Bash arrays/functions/arithmetic, less pipe passthrough and curl startup')
 with tempfile.TemporaryDirectory(prefix='c1-tools-verify-', dir=BUILD) as temporary:
     key = str(Path(temporary) / 'test-ed25519')
     assert 'ssh-ed25519 ' in mips('dropbearkey', '-t', 'ed25519', '-f', key)

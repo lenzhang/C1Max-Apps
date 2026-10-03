@@ -126,6 +126,24 @@ int main(void) {
     assert(back_ready(&s, 192000));
     key_update(&s, 1, BACK, 0, 192001);
 
+    /* Stale inhibition with no keys held clears at the loop level, so the
+     * first gesture after a foreground->stock switch is not swallowed. */
+    inhibit(&s);
+    maybe_uninhibit(&s);
+    assert(!s.inhibited);
+    key_update(&s, 1, BACK, 1, 200000);  /* First back-hold fires right away. */
+    assert(!back_ready(&s, 201999));
+    assert(back_ready(&s, 202000));
+    key_update(&s, 1, BACK, 0, 202001);
+
+    /* Inhibition with a key physically held survives until the release. */
+    key_update(&s, 1, BACK, 1, 210000);
+    inhibit(&s);
+    maybe_uninhibit(&s);
+    assert(s.inhibited);
+    key_update(&s, 1, BACK, 0, 210100);
+    assert(!s.inhibited);
+
     /* A stale run.lock must not disable the global entry after a reboot. */
     char directory[] = "/tmp/c1max-hotkey-test.XXXXXX";
     assert(mkdtemp(directory));

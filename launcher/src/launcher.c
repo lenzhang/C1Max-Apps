@@ -469,17 +469,28 @@ static void drain_input(void){
     if(ioctl(touch_fd,EVIOCGABS(ABS_X),&axis)==0)t_raw_x=axis.value;
     if(ioctl(touch_fd,EVIOCGABS(ABS_Y),&axis)==0)t_raw_y=axis.value;
 }
-/* evdev multicasts to every reader, so watching for the power key while a
- * child runs does not steal input from it. Only used for "powerhome" entries
- * (stock binaries that swallow the power key instead of exiting). */
-static int power_key_seen(void){
-    int descriptors[]={key_fd,matrix_fd},seen=0;struct input_event e;
+/* evdev multicasts to every reader, so watching keys while a child runs does
+ * not steal input from it. Only used for "powerhome" entries (stock binaries
+ * that swallow the power key instead of exiting). Bit 0: power pressed;
+ * bit 1: back (event1 code 14) held for 2s — mirrors the global hotkey. */
+static int home_key_events(void){
+    static int64_t back_since;
+    int power=0;struct input_event e;
+    int fds[2]={key_fd,matrix_fd};
     for(int i=0;i<2;i++){
-        if(descriptors[i]<0)continue;
-        while(read(descriptors[i],&e,sizeof e)==sizeof e)
-            if(e.type==EV_KEY&&e.code==KEY_POWER&&e.value==1)seen=1;
+        if(fds[i]<0)continue;
+        while(read(fds[i],&e,sizeof e)==sizeof e){
+            if(e.type!=EV_KEY)continue;
+            if(e.code==KEY_POWER&&e.value==1)power=1;
+            else if(fds[i]==key_fd&&e.code==KEY_BACKSPACE){
+                if(e.value==0)back_since=0;
+                else if(!back_since)back_since=now_ms();
+            }
+        }
     }
-    return seen;
+    int backhold=back_since&&now_ms()-back_since>=2000;
+    if(backhold)back_since=0;
+    return power|(backhold?2:0);
 }
 static char base_config[512],store_menu[512],store_root[512];
 static int store_enabled(void){return !getenv("C1_STORE_DISABLE")&&access(store_menu,R_OK)==0;}
@@ -504,9 +515,10 @@ static void launch_app(App *app){
         for(;;){
             pid_t done=waitpid(child,&status,WNOHANG);if(done==child)break;
             if(done<0){if(errno==EINTR)continue;break;}
-            /* Stock binaries never exit on their own: power comes home to the
-             * grid (kill only this child; want_quit would exit to stock). */
-            if(want_quit||(app->powerhome&&power_key_seen())){
+            /* Stock binaries never exit on their own: power or a 2s back-hold
+             * comes home to the grid (kills only this child; want_quit would
+             * exit to the stock desktop). */
+            if(want_quit||(app->powerhome&&home_key_events())){
                 kill(-child,SIGTERM);int i;
                 for(i=0;i<30;i++){if(waitpid(child,&status,WNOHANG)==child)break;usleep(100000);}
                 if(i==30){kill(-child,SIGKILL);while(waitpid(child,&status,0)<0&&errno==EINTR){}}

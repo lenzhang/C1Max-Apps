@@ -5,6 +5,7 @@ C1Max Terminal 常用命令
   exit                    退出 Shell，并返回 launcher；Ctrl-D 也可以退出
   ssh HOST                连接远端 SSH（实际使用 Dropbear dbclient）
   scp FILE HOST:PATH      在设备与远端之间复制文件
+  sshd start|stop|status  管理本机 Dropbear SSH 服务（端口 2222）
   curl URL                HTTP/HTTPS 请求、下载和 API 调试
 
 编辑和查看

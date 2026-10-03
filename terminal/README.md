@@ -17,7 +17,9 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 - 输入 `exit`（或按 Ctrl-D）结束交互式 Shell，终端随即回到 launcher。
 - 没有屏幕退出按钮、屏幕键盘或可意外点击的隐藏控件。
 - 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
-  `dbclient` 的兼容入口，`scp` 用于远端文件复制；设备的 `vi` 可通过 `vim` 名称调用。
+  `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
+  本机 Dropbear 服务端（默认端口 2222、仅公钥认证），公钥放在
+  `/storage/terminal/dropbear/authorized_keys`；设备的 `vi` 可通过 `vim` 名称调用。
 - 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
   具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：
   `相机图标键` → `A` → `空格`，也就是文档中写的 `Ctrl-A Space`；不需要寻找或按
@@ -51,7 +53,7 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 
 2026-09-23 实机核对：Buildroot 2020.02.1、MIPS 小端架构、BusyBox 1.31.1。
 此应用默认使用随 apps 分发的 Bash 5.3.20；ADB Shell 与应用终端的 PATH
-和 Shell 并不相同。现有补充工具是 Bash、less、nano、curl、dbclient、scp 和 dropbearkey，
+和 Shell 并不相同。现有补充工具是 Bash、less、nano、curl、dbclient、dropbear、scp 和 dropbearkey，
 终端另外提供 `ssh` 兼容入口与 `vim` 到 BusyBox `vi` 的入口。
 没有 apt/yum/dpkg/rpm/opkg/ipkg，也未配置可直接使用的软件包源。新增工具采用
 `apps/linux-tools` 的交叉编译和版本化部署流程；不能直接安装 PC 或 ARM 软件包。

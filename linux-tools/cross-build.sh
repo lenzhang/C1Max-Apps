@@ -110,8 +110,8 @@ build_dropbear() {
     ./configure --build="$HOST" --host=mipsel-linux-gnu --prefix="$PREFIX" \
         --enable-static --enable-bundled-libtom --disable-zlib --disable-syslog \
         --disable-lastlog --disable-utmp --disable-utmpx --disable-wtmp --disable-wtmpx
-    make -j"$JOBS" PROGRAMS='dbclient dropbearkey scp' STATIC=1
-    install -m755 dbclient dropbearkey scp "$OUT/bin/"
+    make -j"$JOBS" PROGRAMS='dbclient dropbear dropbearkey scp' STATIC=1
+    install -m755 dbclient dropbear dropbearkey scp "$OUT/bin/"
 }
 build_mbedtls() {
     rm -rf "$BUILD/build/mbedtls"

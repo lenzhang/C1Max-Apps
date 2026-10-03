@@ -504,9 +504,9 @@ static void launch_app(App *app){
         for(;;){
             pid_t done=waitpid(child,&status,WNOHANG);if(done==child)break;
             if(done<0){if(errno==EINTR)continue;break;}
-            /* Stock binaries never exit on their own: let power come home. */
-            if(app->powerhome&&power_key_seen())want_quit=1;
-            if(want_quit){
+            /* Stock binaries never exit on their own: power comes home to the
+             * grid (kill only this child; want_quit would exit to stock). */
+            if(want_quit||(app->powerhome&&power_key_seen())){
                 kill(-child,SIGTERM);int i;
                 for(i=0;i<30;i++){if(waitpid(child,&status,WNOHANG)==child)break;usleep(100000);}
                 if(i==30){kill(-child,SIGKILL);while(waitpid(child,&status,0)<0&&errno==EINTR){}}

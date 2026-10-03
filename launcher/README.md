@@ -73,6 +73,8 @@ PNG 解码库，支持透明通道；图标缺失或长度错误时显示备用�
 （`sys.backlight.timer.reset`）。文件不存在时回退调试默认
 `sys.backlight.lock=1`（屏幕常亮）。息屏策略是用户偏好，设置应用可随时改，
 重启后保持；`adb.onboot` 本身不再强制屏幕常亮。
+设置应用的 SSH 页使用 `/storage/apps/data/terminal/dropbear/enabled` 保存开机启动偏好；
+该标志存在时，desktop-service.sh 会在自定义桌面启动前后台启动 Dropbear，服务端口为 2222。
 
 分页、末页选择和手势互斥逻辑可在电脑直接测试，无需连接设备：
 

@@ -7,6 +7,8 @@ set -u
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 BASE=/storage/apps
+export C1_APPS_ROOT="$BASE/current"
+export C1_APPS_DATA="$BASE/data"
 STATE="$BASE/data/launcher"
 LOG="$STATE/desktop-boot.log"
 HEARTBEAT="$STATE/desktop.heartbeat"
@@ -78,6 +80,17 @@ if [ -f "$STATE/adb.onboot" ]; then
         setprop sys.backlight.lock 1 || true
     fi
     setprop sys.backlight.timer.reset 1 || true
+fi
+
+SSH_DATA="$C1_APPS_DATA/terminal/dropbear"
+SSHD="$C1_APPS_ROOT/terminal/assets/bin/sshd"
+if [ -f "$SSH_DATA/enabled" ] && [ "$(cat "$SSH_DATA/enabled" 2>/dev/null || true)" = 1 ]; then
+    if [ -x "$SSHD" ]; then
+        log 'ssh.enabled present; starting Dropbear SSH server'
+        "$SSHD" boot >>"$STATE/sshd.log" 2>&1 &
+    else
+        log 'ssh.enabled present but sshd is missing'
+    fi
 fi
 
 rm -f "$HEARTBEAT"

@@ -104,9 +104,13 @@ build_nano() {
 build_dropbear() {
     # The release makefiles build bundled crypto in the source tree.
     cd "$BUILD/src/dropbear-2026.94"
-    # No server is built. Shared headers otherwise require libcrypt for the
-    # unused server-password path; client password authentication stays enabled.
-    printf '#define DROPBEAR_SVR_PASSWORD_AUTH 0\n' > localoptions.h
+    # Server password authentication is disabled at compile time. The client
+    # still keeps password authentication for connecting to ordinary hosts.
+    cat > localoptions.h <<'EOF'
+#define DROPBEAR_SVR_PASSWORD_AUTH 0
+#define DEFAULT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/bin:/bin"
+#define DEFAULT_ROOT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EOF
     ./configure --build="$HOST" --host=mipsel-linux-gnu --prefix="$PREFIX" \
         --enable-static --enable-bundled-libtom --disable-zlib --disable-syslog \
         --disable-lastlog --disable-utmp --disable-utmpx --disable-wtmp --disable-wtmpx

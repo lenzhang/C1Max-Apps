@@ -91,6 +91,38 @@ int main(void) {
     assert(!ready_after_release(&s, 113000));
     assert(!any_key(&s));
 
+    /* Back long-press: fires at the 2s threshold while still held, once. */
+    key_update(&s, 1, BACK, 1, 120000);
+    assert(!back_ready(&s, 121999));
+    assert(back_ready(&s, 122000));
+    s.back_fired = 1;                    /* Main loop consumes exactly once. */
+    assert(!back_ready(&s, 130000));
+    key_update(&s, 1, BACK, 0, 130001);  /* Release; no second fire. */
+    assert(!back_ready(&s, 131000));
+    key_update(&s, 1, BACK, 1, 140000);  /* Fresh press re-arms. */
+    assert(!back_ready(&s, 141999));
+    assert(back_ready(&s, 142000));
+    key_update(&s, 1, BACK, 2, 143000);  /* Auto-repeat keeps the hold alive. */
+    s.back_fired = 0;
+    assert(back_ready(&s, 143000));
+    key_update(&s, 1, BACK, 0, 143100);
+
+    /* Back on the keypad device (event0) never triggers. */
+    key_update(&s, 0, BACK, 1, 150000);
+    assert(!back_ready(&s, 160000));
+    key_update(&s, 0, BACK, 0, 160001);
+
+    /* Inhibit cancels a pending back-hold until a fresh press. */
+    key_update(&s, 1, BACK, 1, 170000);
+    inhibit(&s);
+    assert(!back_ready(&s, 180000));
+    key_update(&s, 1, BACK, 0, 180001);  /* Release clears inhibition. */
+    assert(!s.inhibited);
+    key_update(&s, 1, BACK, 1, 190000);
+    assert(!back_ready(&s, 191999));
+    assert(back_ready(&s, 192000));
+    key_update(&s, 1, BACK, 0, 192001);
+
     /* A stale run.lock must not disable the global entry after a reboot. */
     char directory[] = "/tmp/c1max-hotkey-test.XXXXXX";
     assert(mkdtemp(directory));

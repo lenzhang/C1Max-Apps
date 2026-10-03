@@ -76,6 +76,11 @@ static void key_update(struct hotkey_state *state, int device, int slot,
     }
     if (chord_down(state) && !state->timing) { state->timing = 1; state->since = now; }
 }
+/* Clear stale startup/resync inhibition once nothing is physically held;
+ * otherwise the first gesture after a foreground->stock switch is swallowed. */
+static void maybe_uninhibit(struct hotkey_state *state) {
+    if (state->inhibited && !any_key(state)) state->inhibited = 0;
+}
 static int foreground_busy(const char *path) {
     /* Use the same persistent inode as run.sh. A stale run.lock directory is
      * intentionally left to the supervisor's boot-ID/identity recovery. */
@@ -233,6 +238,7 @@ int main(int argc, char **argv) {
             if (reaped == child || (reaped < 0 && errno == ECHILD)) child = -1;
         }
         if (child > 0 || foreground_busy(foreground_lock) || path_exists(disabled_path)) inhibit(&state);
+        else maybe_uninhibit(&state);
         if (chord_ready(&state, now) && !quitting) {
             /* Once per chord press; re-arms after the keys are released. */
             if (!foreground_busy(foreground_lock) && !path_exists(disabled_path) && child <= 0) {

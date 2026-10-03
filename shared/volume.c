@@ -33,7 +33,8 @@ static int app_font_shortcuts(const char *marker,const char *expected) {
 }
 static int font_shortcuts(void) {
     return app_font_shortcuts("/tmp/c1max-terminal-font.pid","c1max-terminal\n") ||
-           app_font_shortcuts("/tmp/c1max-crosspoint-font.pid","c1max-crosspoin\n");
+           app_font_shortcuts("/tmp/c1max-crosspoint-font.pid","c1max-crosspoin\n") ||
+           app_font_shortcuts("/tmp/c1max-tox-scroll.pid","c1max-tox\n");
 }
 
 static uint64_t milliseconds(void) {

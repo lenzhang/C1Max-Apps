@@ -42,6 +42,24 @@ int main(int argc,char**argv){
             assert(delivered.messages.back().mine);
             assert(command(b,{Action::Send,bn,"收到。This reply travelled over localhost Tox."},3,bn).command_ok);
             wait_for(a,[](const Snapshot&s){return s.messages.size()==2&&!s.messages.back().mine;},an);
+            // Attachments use standard Tox file callbacks. No bytes are accepted
+            // until the receiving user explicitly approves the offer.
+            std::string wav="RIFF"+std::string(4,'\0')+"WAVE"+std::string(96000,'x');
+            c1::save_private(root+"/a/media/test.wav",wav);
+            assert(command(a,{Action::SendFile,an,"test.wav"},7,an).command_ok);
+            auto offer=wait_for(b,[](const Snapshot&s){return !s.transfers.empty();},bn);
+            assert(offer.transfers.front().state=="offered"&&offer.transfers.front().done==0);
+            assert(command(b,{Action::AcceptFile,bn,std::to_string(offer.transfers.front().id)},4,bn).command_ok);
+            auto complete=wait_for(b,[](const Snapshot&s){return !s.messages.empty()&&s.messages.back().state=="complete";},bn);
+            assert(c1::read_file(root+"/b/media/"+complete.messages.back().file)==wav);
+            wait_for(a,[](const Snapshot&s){return !s.messages.empty()&&s.messages.back().state=="complete";},an);
+            assert(!command(a,{Action::SendFile,an,"../profile.tox"},8,an).command_ok);
+            assert(command(a,{Action::SendFile,an,"test.wav"},9,an).command_ok);
+            offer=wait_for(b,[](const Snapshot&s){return !s.transfers.empty();},bn);
+            assert(command(b,{Action::CancelFile,bn,std::to_string(offer.transfers.front().id)},5,bn).command_ok);
+            wait_for(a,[](const Snapshot&s){return s.transfers.empty()&&s.messages.back().state=="cancelled";},an);
+            assert(command(a,{Action::Background,0,"1"},10,an).background);
+            std::cout<<"PASS: explicit attachment acceptance, chunked byte integrity, rejected paths, cancellation, background preference\n";
             // Oversized text is rejected before entering toxcore's send queue.
             assert(!command(a,{Action::Send,an,std::string(1025,'x')},6,an).command_ok);
             Engine duplicate(root+"/a","");auto blocked=wait_for(duplicate,[](const Snapshot&s){return !s.error.empty();});assert(!blocked.ready);
@@ -49,7 +67,7 @@ int main(int argc,char**argv){
         }
         {
             Engine restored(root+"/a","");auto s=wait_for(restored,[](const Snapshot&s){return s.ready;});assert(s.id==id&&s.name=="Alice / 测试"&&s.friends.size()==1);
-            auto history=restored.snapshot(s.friends.front().number);assert(history.messages.size()==2);
+            auto history=restored.snapshot(s.friends.front().number);assert(history.messages.size()==4&&s.background);assert(history.messages[2].state=="complete"&&history.messages[3].state=="cancelled");
             struct stat st{};assert(!stat((root+"/a/profile.tox").c_str(),&st)&&(st.st_mode&0777)==0600);
             assert(!stat((root+"/a").c_str(),&st)&&(st.st_mode&0777)==0700);
             std::cout<<"PASS: identity, name, friend and history survive restart; private file modes\n";

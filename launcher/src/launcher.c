@@ -334,7 +334,11 @@ static void load_icon(App *app){
     if(app->icon_checked)return;app->icon_checked=1;
     if(!app->icon_id[0])return;
     char path[512];if(snprintf(path,sizeof path,"%s/%s.bgra",icon_root,app->icon_id)>=(int)sizeof path)return;
-    FILE *fp=fopen(path,"rb");if(!fp)return;
+    FILE *fp=NULL;
+    const char *data=getenv("C1_APPS_DATA");if(!data)data="/storage/apps/data";
+    char installed[768];snprintf(installed,sizeof installed,"%s/appstore/current/%s/icon.bgra",data,app->icon_id);
+    if(!getenv("C1_STORE_DISABLE"))fp=fopen(installed,"rb");
+    if(!fp)fp=fopen(path,"rb");if(!fp)return;
     size_t size=(size_t)ICON_SIZE*ICON_SIZE*sizeof(uint32_t);
     uint32_t *pixels=malloc(size);
     if(pixels){if(fread(pixels,1,size,fp)!=size||fgetc(fp)!=EOF){free(pixels);pixels=NULL;}}
@@ -460,11 +464,21 @@ static void drain_input(void){
     if(ioctl(touch_fd,EVIOCGABS(ABS_X),&axis)==0)t_raw_x=axis.value;
     if(ioctl(touch_fd,EVIOCGABS(ABS_Y),&axis)==0)t_raw_y=axis.value;
 }
+static char base_config[512],store_menu[512],store_root[512];
+static int store_enabled(void){return !getenv("C1_STORE_DISABLE")&&access(store_menu,R_OK)==0;}
+static void reload_apps(void){
+    for(int i=0;i<napps;i++)free(apps[i].icon);
+    memset(apps,0,sizeof apps);napps=0;
+    load_config(store_enabled()?store_menu:base_config);if(!napps)load_defaults();
+    if(selected_app>=napps)selected_app=napps?napps-1:-1;
+    if(current_page*PAGE_SIZE>=napps)current_page=0;
+}
 static void launch_app(App *app){
     if(!app->present||!app->argv[0])return;
     fprintf(stderr,"[launcher] Open %s\n",app->label);pid_t parent=getpid(),child=fork();
     if(child==0){
         setpgid(0,0);prctl(PR_SET_PDEATHSIG,SIGTERM);if(getppid()!=parent)_exit(1);
+        if(store_enabled()){char resolved[4096];if(realpath(store_root,resolved))setenv("C1_APPS_ROOT",resolved,1);}
         if(app->cwd[0]&&chdir(app->cwd))_exit(126);
         execv(app->argv[0],app->argv);_exit(127);
     }
@@ -490,7 +504,7 @@ static void open_selection(int index,char *toast,size_t size,int64_t *until){
     selected_app=index;
     if(apps[index].present){
         char message[80];snprintf(message,sizeof message,"正在打开 %s",apps[index].label);
-        draw_grid(message);fb_present();launch_app(&apps[index]);toast[0]=0;
+        draw_grid(message);fb_present();launch_app(&apps[index]);reload_apps();toast[0]=0;
     }else{snprintf(toast,size,"%s 尚未安装",apps[index].label);*until=now_ms()+1600;}
 }
 int main(int argc,char **argv){
@@ -499,7 +513,11 @@ int main(int argc,char **argv){
     if(getenv("C1L_FLIPX"))flip_x=atoi(getenv("C1L_FLIPX"));
     if(getenv("C1L_FLIPY"))flip_y=atoi(getenv("C1L_FLIPY"));
     const char *config=getenv("C1L_CONFIG");if(!config)config="/storage/apps/current/launcher/apps.txt";
-    load_config(config);if(!napps)load_defaults();selected_app=napps?0:-1;
+    snprintf(base_config,sizeof base_config,"%s",config);
+    const char *data=getenv("C1_APPS_DATA");if(!data)data="/storage/apps/data";
+    snprintf(store_root,sizeof store_root,"%s/appstore/current",data);
+    snprintf(store_menu,sizeof store_menu,"%s/launcher-menu.txt",store_root);
+    reload_apps();selected_app=napps?0:-1;
     char icon_path[512];icon_root=getenv("C1L_ICONS");
     if(!icon_root){const char *root=getenv("C1_APPS_ROOT");if(!root)root="/storage/apps/current";
         snprintf(icon_path,sizeof icon_path,"%s/launcher/icons",root);icon_root=icon_path;}

@@ -4,6 +4,37 @@
 原厂已停止维护。本文档记录本机固件升级通道的逆向结论、自签与刷写工具链、
 调试通道现状、以及所有已知陷阱。**改动任何一项前请先读「已知陷阱」。**
 
+## 0. 从零开始（未破解设备如何拿到第一个 shell)
+
+原厂倒闭后，唯一**已实证**的入门路径是伪造 adbAdmit 授权响应（2026-10-02 本机实操成功）:
+
+**原理**：关于页隐藏手势会触发 `GET https://api.mpen.com.cn/v1/pens/{penId}?action=adbAdmit`,
+响应 JSON 含 `"success":true` 即执行 `/usr/bin/enable_adb.sh true` 开 ADB。
+真服务器对本机返回拒绝（`success:false`)，且设备**不校验 TLS 证书**（自签证书即可）。
+
+**步骤**:
+1. 在局域网任一机器上运行 `tools/mitm/adb_unlock_server.py`（自带自签证书，监听 443，
+   需要 root/sudo;adbAdmit 一律批准，其余请求透明转发真实服务器，全量记日志——
+   顺带能抓到设备真实 penId，查官方固件包时要用）;
+2. 路由器上把 `api.mpen.com.cn` 指到这台机器（OpenWrt/dnsmasq:
+   `address=/api.mpen.com.cn/<IP>`;LuCI: 网络 → 主机名映射）;
+3. 设备连 Wi-Fi → 设置 → 关于 → **连点「系统版本」那一行 ≥10 次（任意 5 秒窗口内）**;
+4. toast 判读：`-D` = 请求在途（等几秒再点一轮）;`-N` = 网络失败（检查 DNS 劫持）;
+   「调试模式已经开启」= 批准已生效；响应到达即执行，无需再点；
+5. 拔插一次 USB → `adb devices` 应出现（若只有 MTP，进设置把 USB 切成 ADB 再切回）;
+6. 用完撤掉路由器劫持记录，停掉服务器。
+
+**路径 B（MTP 刷包，研究中，暂不可用）**:`/storage/mtp/update_app.tar.gz` 通道校验
+`storage/check.txt`(=「关于」页系统版本原文 + 逗号，如 `V1.54_MP-D350_20260119.114000,`),
+理论上通过后以 root 解包到 `/`。但 2026-10-04 在当前固件上实测：check.txt 被正常读取，
+载荷却未落地（新版固件的 checkAppValidate 疑似增加指纹/HMAC 校验，待继续逆向）。
+**暂勿依赖此路径。**
+
+**兜底**：UART 115200 8N1（主板测试点）/ USB boot(BOOT_SEL 测试点），见 §7「其他」。
+
+拿到 adb 之后：按 README 构建部署应用；再按 §5/§6 做 OTA 自免疫（换 key + 隔离），
+防止原厂通道把我们的工作冲掉。
+
 ## 1. 分区与刷机链路
 
 ```
@@ -183,12 +214,16 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
 - 连点触发的调试菜单项可见性由点击计数驱动，窗口过期即消失，不是持久开关。
 
 **MTP / update_app.tar.gz 通道**
-- MTP 根 = `/storage/mtp`（只见 diy/record/music/Pictures 等，碰不到系统分区）；
-- `checkupdate` 也处理 `/storage/mtp/update_app.tar.gz`：校验包内 `storage/check.txt`
-  （内容必须恰好为 `<displayId>,<publisher>`，本机 publisher 为空，即
-  `V1.54_MP-D350_20260119.114000,`）→ 通过后以 root 执行
-  `mount -o remount,rw rootfs /; tar -zxf ... -C /`。**这是 MTP 单向写入系统的合法通道**
-  （放探针包试错 check.txt 是零风险的：失败只弹 toast）。
+- MTP 根 = `/storage/mtp`（只见 diy/record/music/Pictures 等，碰不到系统分区）;
+- `checkupdate`(mp_s300 启动时跑）会处理 `/storage/mtp/update_app.tar.gz`:
+  先单独解出 `storage/check.txt` 校验（内容应为 `<displayId>,<publisher>`，
+  displayId = `/etc/system.ver` 原文，本机 publisher 为空，即
+  `V1.54_MP-D350_20260119.114000,`)，通过后以 root 执行
+  `mount -o remount,rw rootfs /; tar -zxf ... -C /`（该命令字符串在二进制中）;
+- **2026-10-04 实测：check.txt 被正常读取校验，但载荷未落地**（探针文件未出现，
+  设备未重启）——当前固件的 `checkAppValidate` 很可能还有指纹/HMAC 校验
+  (`PenHasher::getHmacBinaryStringFingerPrint` 为外部导入），**此通道暂不可用**,
+  从零破解请走 §0 的 MITM 路径。
 
 **launcher 桌面链**
 - desktop-service.sh 用「首帧后写 `$C1L_HEARTBEAT` 文件」判定 launcher 真的拿到了

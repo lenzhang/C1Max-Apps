@@ -29,7 +29,7 @@ C1 Max 系统设置，0.2.0。800×340，跟计算器同一套 `shared/display` 
 2. **显示与熄屏**：亮度 1–15，写入 `/sys/class/backlight/backlight/brightness`，与原厂一样同步 `sys.backlight.percent`，并保存到 `$C1_APPS_DATA/settings/brightness`；熄屏唤醒时 `c1max-volume` 按这个值恢复亮度。自动熄屏可选 30 秒到 30 分钟，写 `sys.backlight.timer`；「永不」写 `sys.backlight.lock=1`。选择同时持久化到 `$C1_APPS_DATA/settings/screenoff`（`lock=`/`timer=` 两行），开机时由 desktop-service.sh 独立于 ADB 开关校验并重新应用；没有有效偏好时保留原厂策略。本页显示实际生效的属性，保存失败会提示。休眠计时和休眠锁只显示，不修改。
 3. **声音**：媒体音量直接调整 `softvolume`（与侧边音量键是同一个控件），显示当前输出是扬声器还是耳机。回到原厂桌面时，launcher 会恢复进入前的混音器状态。
 4. **USB**：显示当前模式和 USB 线是否连接；可以切换 ADB 调试和文件传输（MTP）。切到 MTP 会断开 ADB，需要确认，之后可以在本页切回。
-5. **无线调试**：读 `/proc/net/tcp` 判断 5555（`15B3`）是否在监听，监听时显示 `adb connect IP:5555`。这台 adbd 只在启动时读 `service.adb.tcp.port`，而 `ctl.restart adbd` 或 `adb tcpip` 会拆掉 USB gadget，所以本页**不**重启 adbd：「下次启动时开启」只写入 5555，「清除设置」写入 0。
+5. **SSH 服务**：显示 Dropbear 服务状态、端口（默认 2222）、WLAN 地址和公钥/密码认证信息；可以启动/停止服务、设置 SSH 密码，并设置开机自动启动。没有统一默认密码；启动前需设置密码或导入公钥，密码哈希保存于受保护的 `/storage/terminal/dropbear/password.hash`。服务使用 `/storage/terminal/dropbear/authorized_keys`，主机 Ed25519 密钥保存在应用数据目录。网络 SSH 不依赖网络 ADB，设置页不会重启或修改旧版 `adbd`。
 6. **电池**：电量条、充电状态、充电器、电压、温度、健康状态。
 7. **关于本机**：型号、处理器、内存、存储空间、系统分区、系统和内核版本、运行时间、WLAN 地址、蓝牙名称、序列号。
 

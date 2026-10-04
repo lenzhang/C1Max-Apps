@@ -10,10 +10,24 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
   可用 `C1_TERMINAL_SHELL` 指定一个可执行文件的绝对路径；不解析 Shell 命令字符串。
 - 普通字母直接输入；Shift 组合遵循真实键帽。共享驱动用双击 Shift 切换大写，
   底部 `abc` / `CAPS` 显示当前状态。
+- 设备没有独立数字行，数字在 `Q W E R T Y U I O P` 键帽上方；按住 Shift 再按首排
+  字母即可输入 `1 2 3 4 5 6 7 8 9 0`。例如候选栏要选第 3 项，按 `Shift+E`。
 - 右上退格为终端 DEL 字节；确认发送回车。中间返回发送 Escape；在前缀模式中
-  返回只取消前缀。电源键退出终端回 launcher，不是让词典关机。
-- 输入 `exit` 结束 Shell 后保留最后输出，按电源键回 launcher。
+  返回只取消前缀。电源键返回 launcher。
+- 输入 `exit`（或按 Ctrl-D）结束交互式 Shell，终端随即回到 launcher。
 - 没有屏幕退出按钮、屏幕键盘或可意外点击的隐藏控件。
+- 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
+  `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
+  本机 Dropbear 服务端（默认端口 2222、公钥或密码认证），公钥放在
+  `/storage/terminal/dropbear/authorized_keys`；没有统一默认密码，
+  启动前须在设置页或用 `sshd password` 设置密码，或用 `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
+  `scp` 和其他应用工具；设备的 `vi` 可通过 `vim` 名称调用。
+- 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
+  具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：
+  `相机图标键` → `A` → `空格`，也就是文档中写的 `Ctrl-A Space`；不需要寻找或按
+  屏幕上的 Ctrl 键。底部状态栏会显示 `拼` 或 `abc`。中文模式下输入拼音，空格选首个
+  候选，数字 `1`–`9` 选候选，右上退格删除拼音，回车提交当前候选。候选和拼音显示在
+  底部状态栏；有候选时“符号两次 + Z / X”翻上一页／下一页候选。这是终端内置输入，不会改变 launcher 或其他应用的系统输入法。
 
 “符号”键是一次性前缀，后续操作结束自动恢复普通输入。再按一次可轮换模式：
 
@@ -29,6 +43,11 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 | 符号三次 | Q W E R T Y U I O P | `= + _ \| \ " ' < > !` |
 | 符号三次 | A S D F G H | `[ ] { }`、反引号、`^` |
 
+最常用的两个操作：
+
+- **Tab**：按一次相机图标键，再按空格。也可以在符号导航模式下按“相机图标键两次 + 空格”。
+- **Esc**：没有前缀时按右侧中间的弯箭头返回键；有符号前缀时，它只取消前缀。正在输入拼音时，它取消当前拼音/候选，不把 Esc 送给 Shell。
+
 例如 `ls | less` 的管道是“符号、符号、符号、R”。Ctrl-S 会停止终端输出，
 用“符号、Q”（Ctrl-Q）恢复，这是正常 PTY 软件流控。
 
@@ -36,7 +55,8 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 
 2026-09-23 实机核对：Buildroot 2020.02.1、MIPS 小端架构、BusyBox 1.31.1。
 此应用默认使用随 apps 分发的 Bash 5.3.20；ADB Shell 与应用终端的 PATH
-和 Shell 并不相同。现有补充工具是 Bash、less、nano、dbclient 和 dropbearkey。
+和 Shell 并不相同。现有补充工具是 Bash、less、nano、curl、dbclient、dropbear、scp 和 dropbearkey，
+终端另外提供 `ssh` 兼容入口与 `vim` 到 BusyBox `vi` 的入口。
 没有 apt/yum/dpkg/rpm/opkg/ipkg，也未配置可直接使用的软件包源。新增工具采用
 `apps/linux-tools` 的交叉编译和版本化部署流程；不能直接安装 PC 或 ARM 软件包。
 
@@ -58,7 +78,7 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 反色/粗体/下划线/删除线、备用屏幕、应用光标模式及终端位置查询。
 `vi`、`less` 等的具体版本仍需在设备上验证。UTF-8 分包、中文宽字符和组合字符
 由解析器保存；复杂文字塑形、Emoji、双高/双宽行、斜体和闪烁效果不完整。
-没有中文输入法、鼠标上报、剪贴板、OSC52、图像协议或终端窗口控制。
+没有系统范围输入法协议、鼠标上报、剪贴板、OSC52、图像协议或终端窗口控制。
 远端输出不能通过 OSC 启动本地程序或改写本地剪贴板。
 
 原系统未确认安装 UTF-8 locale，因此子 Shell 使用 `LC_ALL=C`，输出仍按 UTF-8
@@ -89,7 +109,12 @@ PTY 使用 `posix_openpt`、`setsid`、控制终端和规范行规程，窗口�
 ## 构建与安装接口
 
 父级 `apps/CMakeLists.txt` 加 `add_subdirectory(terminal)` 即可。目标为
-`c1max-terminal`，依赖静态 `c1vterm`、共享 `lvgl`、`m`，PTY 不依赖 `libutil`。
+`c1max-terminal`，依赖静态 `c1vterm`、`c1ime`、共享 `lvgl`、`m`，PTY 不依赖 `libutil`。
+`c1ime` 使用 pinned 的 librime 静态库和内置 Rime 数据，不依赖设备侧
+Rime/IBus/Fcitx。公开设备包在 `assets/rime-data/build/` 随附预编译的
+prism/table 文件，避免在 103 MiB 设备上首次启动时编译大词典；缺少这组文件的
+开发包会提示缺少词库并继续英文输入，不在设备上编译。
+`tools/build.sh` 用静态 MIPS deployer 在构建机 QEMU 中生成这组文件；打包前必须存在。
 libvterm 的九个 C 源文件和生成表已随源码提供，无需联网获取、libtool 或 ncurses。
 父项目统一提供静态 MIPS32r2/glibc 工具链和 `shared/display.cpp`、`keyboard.cpp`。
 
@@ -98,8 +123,10 @@ libvterm 的九个 C 源文件和生成表已随源码提供，无需联网获�
 ```text
 terminal/
   c1max-terminal
-  assets/                  # 整目录，包括字体许可、terminfo、inputrc、shellrc
+  assets/                  # 整目录，包括字体、terminfo、inputrc、shellrc、help 和命令入口
   licenses/libvterm.txt     # 从 vendor/libvterm/LICENSE 拷贝
+  licenses/term-ime.txt     # term-ime/Rime 集成许可
+  licenses/term-ime-dict.txt # 词库分发仓库许可；原始 Rime 数据许可见同目录 rime-*.txt
 ```
 
 依赖 `shared/NotoSansSC-Regular.ttf`。JetBrains Mono 字体来自本机 CardputerZero
@@ -114,8 +141,8 @@ libvterm 官方发布地址、版本和 SHA-256 见 `vendor/README.md`。
 规范模式退格、14×80 尺寸、Ctrl-C 中断 `sleep` 后 Shell 继续、正常退出、错误
 执行、抗 HUP/TERM 进程升级终止和 waitpid 回收。
 
-`tools/check_mips.py` 在 builder 容器内使用既有 LVGL archive 做独立静态链接
-检查，不重配父项目。`tools/inventory.sh` 是设备上可运行的只读工具/PTY清单，
+`tools/check_mips.py` 在 builder 容器内构建并检查实际的终端目标
+（包含 Rime 和依赖），要求已经配置父项目 `.build/mips`。`tools/inventory.sh` 是设备上可运行的只读工具/PTY清单，
 不会自行调用 ADB、安装或修改系统。
 
 `tests/render.sh /absolute/output.ppm` 使用测试显示后端，运行实际应用、真实
@@ -123,7 +150,7 @@ PTY 和 LVGL 软件渲染，产生 800×340 离屏图像；不需要设备、SDL
 追加 `--refresh` 可检查四轮定时 ANSI 输出产生不同完整画面，期间不发送后续按键。
 已在宿主机检查英文等宽列、中文双格、粗体、下划线、256 色/真彩色和状态提示。
 原生解析/PTY测试已在 macOS 及 Debian Bookworm 容器通过；静态 MIPS32r2
-链接检查输出约 1.25 MB 可执行文件。这些构建产物均为临时验证文件。
+链接检查应包含当前 Rime 静态依赖。这些构建产物均为临时验证文件。
 
 以上宿主机测试不能替代设备上的键码、字体可读性、显存和全屏编辑器验证。
 
@@ -134,8 +161,12 @@ PTY 和 LVGL 软件渲染，产生 800×340 离屏图像；不需要设备、SDL
 `docs/CUSTOM-APPS-PLAN.md` 记录未找到 Python/Lua 或 dpkg/opkg/rpm。旧资料可能
 来自不同批次设备，先用 inventory 核实当前板，不把库文件存在当作 CLI 已安装。
 
-建议补全 bash（历史/行编辑）、less、nano、轻量 SSH 客户端（dbclient 或 ssh）、
-jq 和 sqlite3；网络抓诊断可加 tcpdump/strace，按当前任务实际需要打包。已有
-BusyBox 命令不必再覆盖原系统。统一放 apps 下的 linux-tools，避免覆盖 /bin。
+当前设备已经随终端包补全 Bash（历史/行编辑）、less、nano、Dropbear SSH 客户端
+（`ssh`/`dbclient`）、`scp`，并提供 `vim` 到 BusyBox `vi` 的兼容入口。设备原有
+`/usr/bin/wget` 是 GNU Wget 1.20.3，支持 HTTPS；终端默认使用应用包内的 CA 证书；BusyBox 已覆盖 grep、sed、awk、find、xargs、
+tar、gzip、unzip、sqlite3、ps、top、df、du、ping 和 nc 等高频命令。后续如有需要，可再加入 jq、tmux、strace
+或 readelf；已有 BusyBox 命令不必重复覆盖。统一放 apps 下的 linux-tools，避免覆盖 /bin。
 
 Shift + 音量＋／－可将正文字号在 12–28 px 之间调整，同时更新 PTY 行列数；不改变系统音量，不增加界面提示。
+
+输入法集成测试：构建 `c1ime-test`，用生成的词库在 QEMU 下验证真实拼音候选、中文提交、编辑与缺词库回退；离屏渲染测试使用输入法 stub，不替代此测试。

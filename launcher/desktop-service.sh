@@ -7,6 +7,7 @@ set -u
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 BASE=/storage/apps
+export C1_APPS_ROOT="$BASE/current" C1_APPS_DATA="$BASE/data"
 STATE="$BASE/data/launcher"
 LOG="$STATE/desktop-boot.log"
 HEARTBEAT="$STATE/desktop.heartbeat"
@@ -89,6 +90,10 @@ if [ -f "$screenoff" ]; then
     fi
 fi
 # END screenoff preference
+
+# SSH is opt-in and independent of the ADB flag.
+SSHD="$C1_APPS_ROOT/terminal/assets/bin/sshd"
+if [ -x "$SSHD" ]; then "$SSHD" boot >>"$STATE/sshd.log" 2>&1 & fi
 
 rm -f "$HEARTBEAT"
 log "Starting custom desktop release=$(readlink "$BASE/current" 2>/dev/null || echo unknown)"

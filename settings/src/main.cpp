@@ -163,8 +163,8 @@ std::string prop(const char *name) {
     return first_line(out);
 }
 
-void set_prop(const char *name, const std::string &value) {
-    run_argv({"/usr/bin/setprop", name, value}, nullptr, 1500);
+bool set_prop(const char *name, const std::string &value) {
+    return run_argv({"/usr/bin/setprop", name, value}, nullptr, 1500) == 0;
 }
 
 std::string value_after(const std::string &text, const char *key) {
@@ -862,13 +862,9 @@ std::vector<Item> display_page() {
     off.key = "c:screenoff";
     off.label = "自动熄屏";
     for (auto &o : kScreenOff) off.options.push_back(o.label);
-    // The persisted preference wins over the live (volatile) properties;
-    // only when the file is absent do we infer the choice from them.
-    const std::string saved = read_file((data_dir() + "/screenoff").c_str());
-    const bool never = !saved.empty() ? value_after(saved, "lock") == "1"
-                                      : prop("sys.backlight.lock") == "1";
-    const long ms = !saved.empty() ? to_long(value_after(saved, "timer"), 1200000)
-                                   : to_long(prop("sys.backlight.timer"), 1200000);
+    // Show the active policy, including changes made by the stock UI.
+    const bool never = prop("sys.backlight.lock") == "1";
+    const long ms = to_long(prop("sys.backlight.timer"), 1200000);
     off.option = kScreenOffCount - 1;
     if (!never) {
         int best = 0;
@@ -878,12 +874,21 @@ std::vector<Item> display_page() {
     }
     off.on_change = [](int index) {
         const auto &o = kScreenOff[index];
-        if (o.ms) set_prop("sys.backlight.timer", std::to_string(o.ms));
-        set_prop("sys.backlight.lock", o.ms ? "0" : "1");
-        set_prop("sys.backlight.timer.reset", "1");
+        if ((o.ms && !set_prop("sys.backlight.timer", std::to_string(o.ms))) ||
+            !set_prop("sys.backlight.lock", o.ms ? "0" : "1") ||
+            !set_prop("sys.backlight.timer.reset", "1")) {
+            show_toast("熄屏设置失败，请重试"); return;
+        }
         // Persist the choice; desktop-service.sh reapplies it at boot.
         ::mkdir(data_dir().c_str(), 0700);
-        write_file(data_dir() + "/screenoff", format("lock=%d\ntimer=%ld\n", o.ms ? 0 : 1, o.ms));
+        std::string path=data_dir()+"/screenoff", tmp=path+".XXXXXX";
+        std::vector<char> name(tmp.begin(),tmp.end());name.push_back(0);
+        int fd=::mkstemp(name.data());
+        std::string text=format("lock=%d\ntimer=%ld\n",o.ms?0:1,o.ms);
+        bool ok=fd>=0;
+        if(ok){ok=::write(fd,text.data(),text.size())==static_cast<ssize_t>(text.size())&&::fsync(fd)==0;::close(fd);}
+        if(ok)ok=::rename(name.data(),path.c_str())==0;
+        if(!ok){::unlink(name.data());show_toast("已生效，但保存失败；重启后可能恢复旧设置");}
     };
     v.push_back(std::move(off));
 

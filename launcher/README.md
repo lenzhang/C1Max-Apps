@@ -61,12 +61,11 @@ PNG 解码库，支持透明通道；图标缺失或长度错误时显示备用�
 
 `desktop-service.sh` 是 init 一次性服务：等 smartUI 稳定后启动自定义桌面，
 用心跳文件判定 launcher 真的拿到 framebuffer，拿不到就回退原厂 UI。
-`/storage/apps/data/launcher/adb.onboot` 存在时（调试便利总开关）额外开启 ADB，
-并按 `/storage/apps/data/settings/screenoff`（设置应用写入的 `lock=`/`timer=`
-两行）重放息屏偏好，缺行跳过对应项，最后重置一次原厂空闲计时
-（`sys.backlight.timer.reset`）。文件不存在时回退调试默认
-`sys.backlight.lock=1`（屏幕常亮）。息屏策略是用户偏好，设置应用可随时改，
-重启后保持；`adb.onboot` 本身不再强制屏幕常亮。
+`/storage/apps/data/launcher/adb.onboot` 只控制开机 ADB。
+息屏偏好独立读取 `/storage/apps/data/settings/screenoff`（设置应用写入的
+`lock=`/`timer=` 两行），校验完整后先应用超时、再应用锁并重置空闲计时。
+没有有效偏好时保留原厂设置，不默认强制常亮；「永不」不把超时写成 0。
+设置页显示实际生效的属性，保存失败会明确提示。
 
 分页、末页选择和手势互斥逻辑可在电脑直接测试，无需连接设备：
 

@@ -61,24 +61,34 @@ if [ -f "$STATE/adb.onboot" ]; then
     log 'adb.onboot present; enabling ADB'
     setprop service.adb.tcp.port 5555 || true
     /usr/bin/enable_adb.sh true || true
-    # adb.onboot is the debug-convenience master switch (ADB at boot).
-    # The screen-off policy is a user preference owned by the settings app,
-    # persisted as lock=/timer= lines in /storage/apps/data/settings/screenoff.
-    screenoff=/storage/apps/data/settings/screenoff
-    if [ -f "$screenoff" ]; then
-        while IFS='=' read -r k v || [ -n "$k" ]; do
-            case "$k" in
-                lock) setprop sys.backlight.lock "$v" || true ;;
-                timer) setprop sys.backlight.timer "$v" || true ;;
-            esac
-        done < "$screenoff"
-        log "Applied screen-off preference from $screenoff"
-    else
-        # No saved preference yet: debug default keeps the screen on.
-        setprop sys.backlight.lock 1 || true
-    fi
-    setprop sys.backlight.timer.reset 1 || true
 fi
+
+# BEGIN screenoff preference: independent of ADB; absent/invalid keeps stock policy.
+screenoff=/storage/apps/data/settings/screenoff
+if [ -f "$screenoff" ]; then
+    saved_lock='' saved_timer='' valid=1
+    while IFS='=' read -r k v || [ -n "$k" ]; do
+        case "$k:$v" in
+            lock:0|lock:1) [ -z "$saved_lock" ] || valid=0; saved_lock=$v ;;
+            timer:0|timer:30000|timer:60000|timer:120000|timer:300000|timer:600000|timer:1200000|timer:1800000)
+                [ -z "$saved_timer" ] || valid=0; saved_timer=$v ;;
+            *) valid=0 ;;
+        esac
+    done < "$screenoff"
+    [ -n "$saved_lock" ] && [ -n "$saved_timer" ] || valid=0
+    [ "$saved_lock:$saved_timer" != 0:0 ] || valid=0
+    if [ "$valid" = 1 ]; then
+        # Never write timer=0: unlocking later must not instantly blank the panel.
+        applied=1
+        if [ "$saved_timer" != 0 ]; then setprop sys.backlight.timer "$saved_timer" || applied=0; fi
+        if [ "$applied" = 1 ]; then setprop sys.backlight.lock "$saved_lock" || applied=0; fi
+        setprop sys.backlight.timer.reset 1 || applied=0
+        log "Screen-off preference applied=$applied"
+    else
+        log 'Invalid screen-off preference; retaining stock policy'
+    fi
+fi
+# END screenoff preference
 
 rm -f "$HEARTBEAT"
 log "Starting custom desktop release=$(readlink "$BASE/current" 2>/dev/null || echo unknown)"

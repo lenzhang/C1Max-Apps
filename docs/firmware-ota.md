@@ -55,8 +55,9 @@ p6 200M=/usr/resource  p7 100M=/usr/data  p8 500M=rootfs(/)  p9 57.3G=/storage
 
 OTA 网络侧：开机首次联网自动 `GET https://api.mpen.com.cn/v1/pens/{penId}?&action=upgradeRom&version={displayId}`，
 失败 60s 重试；服务器可下发 `isForce=1` 强制包，设备**零提示静默下载并自动重启刷机**
-（2026-10-02 的事故即此）。penId 形如 `2fe12e28--10f4086f-00000018-12955a33`
-（由 `/sys/class/net/wlan0/cid` 拼接），displayId 在 `/etc/system.ver`
+（2026-10-02 的事故即此）。penId 形如 `xxxxxxxx--xxxxxxxx-xxxxxxxx-xxxxxxxx`
+（由 `/sys/class/net/wlan0/cid` 拼接，可在设备上读取；或用 §0 的 MITM 服务器从请求路径抓），
+displayId 在 `/etc/system.ver`
 （本机 `V1.54_MP-D350_20260119.114000`，「关于」页显示为 MP-C1 是替换后的字样）。
 
 ## 2. 验签与自签（tools/ota/）
@@ -174,7 +175,7 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
 - **绝不要重启 adbd**：`ctl.restart adbd`、`adb tcpip 5555`、`setprop ctl.stop adbd` 都会让
   adbd 永久死亡（init 不会拉起，gadget 消失）。恢复：设置里 USB 切 MTP 再切 ADB，或重启；
 - 本机 adbd（116KB 老 AOSP 构建）**不支持 `service.adb.tcp.port`**，无线 adb 协议不可达；
-  无线通道 = `nc 192.168.4.142 2323`（telnetd，root shell，无认证——限家庭内网调试用）；
+  无线通道 = `nc <设备IP> 2323`（telnetd，root shell，无认证——限家庭内网调试用）；
 - gadget 配置读取的是 `user.usb.config`；`sys.usb.state=adb` 触发 `start adbd; start mtp`
   （adb 模式下是 adb+mtp 复合）；
 - **smartUI/mp_s300 启停会重新配置 USB gadget，adb 会话必然断开**——每次切原厂/自定义

@@ -11,6 +11,9 @@ server="$root/linux-tools/bin/dropbear"
 keygen="$root/linux-tools/bin/dropbearkey"
 key="$data/dropbear_ed25519_host_key"
 authorized="$auth/authorized_keys"
+password_hash="$data/password.hash"
+cryptpw=/usr/bin/cryptpw
+default_password=c1max
 pidfile="$data/dropbear.pid"
 identity="$data/dropbear.identity"
 runport="$data/running-port"
@@ -18,7 +21,7 @@ logfile="$data/server.log"
 boot_id=$(cat /proc/sys/kernel/random/boot_id)
 
 fail() { echo "sshd: $*" >&2; exit 1; }
-usage() { echo 'usage: sshd start|stop|restart|status [--machine]|enable|disable|port N|authorize FILE|boot' >&2; exit 2; }
+usage() { echo 'usage: sshd start|stop|restart|status [--machine]|enable|disable|password|port N|authorize FILE|boot' >&2; exit 2; }
 valid_port() {
     case "$1" in ''|*[!0-9]*|0*) return 1 ;; esac
     [ "${#1}" -le 5 ] && [ "$1" -ge 1024 ] && [ "$1" -le 65535 ]
@@ -89,6 +92,53 @@ atomic_write() {
     chmod 600 "$1.tmp"
     mv "$1.tmp" "$1"
 }
+valid_password_hash() {
+    candidate=${1:-$password_hash}
+    [ -s "$candidate" ] || return 1
+    hash=$(awk 'NR == 1 { print; exit }' "$candidate" 2>/dev/null || true)
+    case "$hash" in
+        '$5$'*|'$6$'*) [ "${#hash}" -ge 20 ] && [ "${#hash}" -le 255 ] ;;
+        *) return 1 ;;
+    esac
+}
+ensure_password_hash() {
+    [ ! -L "$password_hash" ] || fail 'password hash must not be a symlink'
+    if ! valid_password_hash; then
+        [ -x "$cryptpw" ] || fail 'cryptpw is missing; cannot initialize SSH password'
+        printf '%s' "$default_password" | "$cryptpw" -P 0 -m sha512 > "$password_hash.tmp" || fail 'default SSH password initialization failed'
+        chmod 600 "$password_hash.tmp"
+        valid_password_hash "$password_hash.tmp" || fail 'generated SSH password hash is invalid'
+        mv "$password_hash.tmp" "$password_hash"
+    fi
+    chmod 600 "$password_hash"
+}
+set_password() {
+    [ -x "$cryptpw" ] || fail 'cryptpw is missing; cannot set SSH password'
+    first=''; second=''; tty_state=''
+    if tty_state=$(stty -g 2>/dev/null); then
+        printf 'New SSH password: ' >&2
+        stty -echo
+        IFS= read -r first || true
+        stty "$tty_state"
+        printf '\nConfirm SSH password: ' >&2
+        stty -echo
+        IFS= read -r second || true
+        stty "$tty_state"
+        printf '\n' >&2
+    else
+        IFS= read -r first || fail 'provide the new password twice on stdin'
+        IFS= read -r second || fail 'provide the new password twice on stdin'
+    fi
+    [ -n "$first" ] || fail 'password cannot be empty'
+    [ "$first" = "$second" ] || fail 'passwords do not match'
+    [ "${#first}" -le 64 ] || fail 'password is limited to 64 characters'
+    [ ! -L "$password_hash" ] || fail 'password hash must not be a symlink'
+    printf '%s' "$first" | "$cryptpw" -P 0 -m sha512 > "$password_hash.tmp" || fail 'password hashing failed'
+    chmod 600 "$password_hash.tmp"
+    valid_password_hash "$password_hash.tmp" || fail 'generated SSH password hash is invalid'
+    mv "$password_hash.tmp" "$password_hash"
+    printf 'sshd password updated\n'
+}
 prepare() {
     private_dir "$data"
     # /storage/apps is world-writable on stock devices. Auth keys must live
@@ -109,6 +159,7 @@ start_server() {
     fi
     [ -x "$server" ] && [ -x "$keygen" ] || fail 'Dropbear tools are missing from this release'
     prepare
+    ensure_password_hash
     [ ! -L "$key" ] || fail 'host key must not be a symlink'
     if [ ! -s "$key" ]; then
         "$keygen" -t ed25519 -f "$key.new" > "$data/keygen.log" 2>&1 || fail "host-key generation failed; see $data/keygen.log"
@@ -171,7 +222,8 @@ status() {
     enabled=0
     [ "$(cat "$data/enabled" 2>/dev/null || true)" != 1 ] || enabled=1
     if [ "${2:-}" = --machine ]; then
-        printf 'running=%s\nlistening=%s\npid=%s\nport=%s\nrunning_port=%s\nenabled=%s\nkeys=%s\n' "$active" "$bound" "$pid" "$port" "$live_port" "$enabled" "$(key_count)"
+        password=0; valid_password_hash && password=1 || true
+        printf 'running=%s\nlistening=%s\npid=%s\nport=%s\nrunning_port=%s\nenabled=%s\nkeys=%s\npassword=%s\n' "$active" "$bound" "$pid" "$port" "$live_port" "$enabled" "$(key_count)" "$password"
         exit 0
     fi
     if [ "$bound" = 1 ]; then echo "sshd running on port $live_port (pid $pid)"; else echo 'sshd stopped'; exit 1; fi
@@ -201,6 +253,7 @@ case "$1" in
     start|stop|restart|enable|disable) [ "$#" = 1 ] || usage ;;
     port) [ "$#" = 2 ] && valid_port "$2" || usage ;;
     authorize) [ "$#" = 2 ] || usage ;;
+    password) [ "$#" = 1 ] || usage ;;
     *) usage ;;
 esac
 private_dir "$data"
@@ -212,6 +265,7 @@ case "$1" in
     restart) stop_server; start_server ;;
     enable) start_server; atomic_write "$data/enabled" 1; echo 'sshd autostart enabled' ;;
     disable) atomic_write "$data/enabled" 0; echo 'sshd autostart disabled (current listener unchanged)' ;;
+    password) set_password ;;
     authorize) authorize "$@" ;;
     port)
         old_port=$(configured_port)

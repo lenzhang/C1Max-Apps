@@ -20,7 +20,7 @@ exec 9>"$BUILD/build.lock"
 flock 9
 
 # A source or recipe change invalidates every build; the source archives stay cached.
-FINGERPRINT=$(cat sources.json cross-build.sh Dockerfile | sha256sum | cut -d' ' -f1)
+FINGERPRINT=$(cat sources.json cross-build.sh patches/dropbear-password-file.patch Dockerfile | sha256sum | cut -d' ' -f1)
 FINGERPRINT="$FINGERPRINT:$(mipsel-linux-gnu-gcc -dumpfullversion):$(dpkg-query -W -f='${Version}' libc6-dev-mipsel-cross)"
 if [ "$(cat "$BUILD/fingerprint" 2>/dev/null || true)" != "$FINGERPRINT" ]; then
     python3 - <<'PY'
@@ -104,13 +104,16 @@ build_nano() {
 build_dropbear() {
     # The release makefiles build bundled crypto in the source tree.
     cd "$BUILD/src/dropbear-2026.94"
-    # Server password authentication is disabled at compile time. The client
-    # still keeps password authentication for connecting to ordinary hosts.
+    # Password authentication uses the C1Max hash file; the client still keeps
+    # password authentication for connecting to ordinary hosts.
     cat > localoptions.h <<'EOF'
-#define DROPBEAR_SVR_PASSWORD_AUTH 0
+#define DROPBEAR_SVR_PASSWORD_AUTH 1
+#define HAVE_CRYPT 1
+#define C1MAX_PASSWORD_HASH_FILE "/storage/apps/data/terminal/dropbear/password.hash"
 #define DEFAULT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/bin:/bin"
 #define DEFAULT_ROOT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EOF
+    patch --batch --forward -p1 < /work/patches/dropbear-password-file.patch >/dev/null
     ./configure --build="$HOST" --host=mipsel-linux-gnu --prefix="$PREFIX" \
         --enable-static --enable-bundled-libtom --disable-zlib --disable-syslog \
         --disable-lastlog --disable-utmp --disable-utmpx --disable-wtmp --disable-wtmpx

@@ -104,6 +104,7 @@ std::string apps_root_dir() {
 std::string sshd_data_dir() { return apps_data_dir() + "/terminal/dropbear"; }
 std::string sshd_enabled_file() { return sshd_data_dir() + "/enabled"; }
 std::string sshd_pid_file() { return sshd_data_dir() + "/dropbear.pid"; }
+std::string sshd_password_file() { return sshd_data_dir() + "/password.hash"; }
 
 bool sshd_running() {
     const std::string text = first_line(read_file(sshd_pid_file().c_str(), 32));
@@ -125,6 +126,11 @@ bool sshd_running() {
 
 bool sshd_auto_start() {
     return first_line(read_file(sshd_enabled_file().c_str(), 16)) == "1";
+}
+
+bool sshd_password_configured() {
+    const std::string hash = first_line(read_file(sshd_password_file().c_str(), 256));
+    return hash.rfind("$5$", 0) == 0 || hash.rfind("$6$", 0) == 0;
 }
 
 // argv only. Never concatenate SSID or password into a shell string.
@@ -483,7 +489,7 @@ const char *const kSectionIcon[] = {LV_SYMBOL_WIFI, LV_SYMBOL_IMAGE, LV_SYMBOL_V
 const char *const kSectionName[] = {"WLAN", "显示与熄屏", "声音", "USB", "SSH 服务", "电池", "关于本机"};
 
 // Sheets replace the list temporarily; Back always returns to the page.
-enum class Sheet { None, Network, Password, Hidden, Confirm, Picker };
+enum class Sheet { None, Network, Password, Hidden, SshPassword, Confirm, Picker };
 enum class Zone { Sidebar, Content };
 
 int section = 0;
@@ -497,8 +503,9 @@ uint32_t toast_until = 0;
 
 // Sheet state.
 std::string sheet_ssid, sheet_id, password, hidden_ssid;
+std::string ssh_password, ssh_password_confirm;
 bool sheet_open = false, show_password = false;
-int input_target = 0;  // 0 password, 1 hidden SSID
+int input_target = 0;  // 0 Wi-Fi password, 1 hidden SSID, 2/3 SSH password/confirmation
 std::string confirm_title, confirm_text, confirm_button;
 std::function<void()> confirm_fn;
 // Picker: full-row options for a Choice, easier to hit than inline arrows.
@@ -541,6 +548,7 @@ void show_toast(const std::string &text, uint32_t ms = 3500) {
 
 void sync_list(bool reset_focus = false);
 void paint_chrome();
+void set_focus(int index, bool anim = true);
 void open_sheet(Sheet s);
 void close_sheet();
 
@@ -551,6 +559,43 @@ bool ensure_sshd_data() {
     ::mkdir(data.c_str(), 0700);
     struct stat st{};
     return ::stat(data.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+bool save_sshd_password(const std::string &first, const std::string &second) {
+    if (first.empty()) { show_toast("密码不能为空", 5000); return false; }
+    if (first != second) { show_toast("两次输入的密码不一致", 5000); return false; }
+    if (first.size() > 64) { show_toast("密码最长 64 个字符", 5000); return false; }
+    if (!ensure_sshd_data()) { show_toast("无法保存 SSH 密码", 5000); return false; }
+    int pipefd[2] = {-1, -1};
+    if (::pipe(pipefd) != 0) { show_toast("无法启动密码设置", 5000); return false; }
+    const std::string command = apps_root_dir() + "/terminal/assets/bin/sshd";
+    pid_t pid = ::fork();
+    if (pid < 0) {
+        ::close(pipefd[0]); ::close(pipefd[1]);
+        show_toast("无法启动密码设置", 5000);
+        return false;
+    }
+    if (pid == 0) {
+        ::dup2(pipefd[0], STDIN_FILENO);
+        ::close(pipefd[0]); ::close(pipefd[1]);
+        ::execl(command.c_str(), command.c_str(), "password", static_cast<char *>(nullptr));
+        _exit(127);
+    }
+    ::close(pipefd[0]);
+    const std::string input = first + "\n" + second + "\n";
+    size_t sent = 0;
+    while (sent < input.size()) {
+        const ssize_t n = ::write(pipefd[1], input.data() + sent, input.size() - sent);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) break;
+        sent += static_cast<size_t>(n);
+    }
+    ::close(pipefd[1]);
+    int status = 0;
+    while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+    const bool ok = sent == input.size() && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    if (!ok) show_toast("SSH 密码保存失败，请检查终端日志", 5000);
+    return ok;
 }
 
 void start_sshd_action(const char *action_name) {
@@ -923,6 +968,45 @@ std::vector<Item> password_sheet() {
     return v;
 }
 
+std::vector<Item> ssh_password_sheet() {
+    std::vector<Item> v;
+    Item first;
+    first.kind = Kind::Input;
+    first.key = "in:ssh-password";
+    first.label = "新密码";
+    first.value = masked(ssh_password, show_password, input_target == 2);
+    first.on_enter = [] {
+        input_target = 3;
+        sync_list();
+        for (int i = 0; i < static_cast<int>(items.size()); ++i)
+            if (items[i].key == "in:ssh-confirm") set_focus(i);
+    };
+    v.push_back(std::move(first));
+    Item confirm;
+    confirm.kind = Kind::Input;
+    confirm.key = "in:ssh-confirm";
+    confirm.label = "确认密码";
+    confirm.value = masked(ssh_password_confirm, show_password, input_target == 3);
+    confirm.on_enter = [] { input_target = 3; sync_list(); };
+    v.push_back(std::move(confirm));
+    v.push_back(action("show", "显示密码（拍照键）", show_password ? "开" : "关", [] { show_password = !show_password; sync_list(); }));
+    auto save = action("save", "保存密码", "", [] {
+        if (save_sshd_password(ssh_password, ssh_password_confirm)) {
+            std::fill(ssh_password.begin(), ssh_password.end(), '\0');
+            std::fill(ssh_password_confirm.begin(), ssh_password_confirm.end(), '\0');
+            ssh_password.clear();
+            ssh_password_confirm.clear();
+            show_toast("SSH 密码已更新");
+            close_sheet();
+        }
+    });
+    save.accent = true;
+    v.push_back(std::move(save));
+    v.push_back(action("cancel", "取消", "", [] { close_sheet(); }));
+    v.push_back(note("tip", "密码长度 1–64 个字符；设置后公钥登录仍然有效。"));
+    return v;
+}
+
 std::vector<Item> confirm_sheet() {
     std::vector<Item> v;
     v.push_back(note("text", confirm_text));
@@ -1064,15 +1148,17 @@ std::vector<Item> ssh_page() {
     service.danger = on && !busy;
     v.push_back(std::move(service));
     v.push_back(info("端口", "2222"));
-    v.push_back(info("认证", "仅公钥"));
+    v.push_back(info("认证", sshd_password_configured() ? "公钥 + 密码" : "公钥 + 密码（默认 c1max）"));
     if (on) {
         const std::string ip = wifi.ip.empty() ? read_wifi().ip : wifi.ip;
         v.push_back(info("电脑上运行", ip.empty() ? "未连接 WLAN" : "ssh -p 2222 root@" + ip));
     }
+    const bool configured = sshd_password_configured();
+    v.push_back(action("password", "设置 SSH 密码", configured ? "已设置" : "默认 c1max", [] { open_sheet(Sheet::SshPassword); }));
     v.push_back(action("autostart", "开机自动启动", auto_start ? "已开启" : "未开启", [auto_start] {
                            set_sshd_auto_start(!auto_start);
                        }));
-    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。SSH 服务不依赖网络 ADB；首次启动会生成主机密钥。"));
+    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。首次启动默认密码为 c1max，可在此修改；密码只保存哈希。"));
     return v;
 }
 
@@ -1185,6 +1271,7 @@ std::vector<Item> build_items() {
     case Sheet::Network: return network_sheet();
     case Sheet::Password:
     case Sheet::Hidden: return password_sheet();
+    case Sheet::SshPassword: return ssh_password_sheet();
     case Sheet::Confirm: return confirm_sheet();
     case Sheet::Picker: return picker_sheet();
     case Sheet::None: break;
@@ -1206,6 +1293,7 @@ std::string sheet_title() {
     case Sheet::Network: return display_ssid(sheet_ssid);
     case Sheet::Password: return sheet_id.empty() ? "输入 Wi-Fi 密码" : "修改密码";
     case Sheet::Hidden: return "添加其他网络";
+    case Sheet::SshPassword: return "设置 SSH 密码";
     case Sheet::Confirm: return confirm_title;
     case Sheet::Picker: return picker_label;
     case Sheet::None: break;
@@ -1249,7 +1337,7 @@ void apply_value(Item &it) {
 
 void item_clicked(lv_event_t *e);
 void adjust(int dir);
-void set_focus(int index, bool anim = true);
+void set_focus(int index, bool anim);
 
 void step_clicked(lv_event_t *e) {
     const intptr_t packed = reinterpret_cast<intptr_t>(lv_event_get_user_data(e));
@@ -1423,12 +1511,18 @@ void open_sheet(Sheet s) {
         show_password = false;
         input_target = s == Sheet::Hidden ? 1 : 0;
     }
+    if (s == Sheet::SshPassword) {
+        ssh_password.clear();
+        ssh_password_confirm.clear();
+        show_password = false;
+        input_target = 2;
+    }
     if (sheet == Sheet::None) return_key = focus >= 0 && focus < static_cast<int>(items.size()) ? items[focus].key : "";
     sheet = s;
     zone = Zone::Content;
     sync_list(true);
     // Start on the field to type into; confirmations default to the safe choice.
-    const char *start = s == Sheet::Confirm ? "a:cancel" : s == Sheet::Hidden ? "in:ssid" : s == Sheet::Password ? "in:pw" : "";
+    const char *start = s == Sheet::Confirm ? "a:cancel" : s == Sheet::Hidden ? "in:ssid" : s == Sheet::Password ? "in:pw" : s == Sheet::SshPassword ? "in:ssh-password" : "";
     for (int i = 0; *start && i < static_cast<int>(items.size()); ++i)
         if (items[i].key == start) set_focus(i, false);
 }
@@ -1436,6 +1530,10 @@ void open_sheet(Sheet s) {
 void close_sheet() {
     std::fill(password.begin(), password.end(), '\0');
     password.clear();
+    std::fill(ssh_password.begin(), ssh_password.end(), '\0');
+    std::fill(ssh_password_confirm.begin(), ssh_password_confirm.end(), '\0');
+    ssh_password.clear();
+    ssh_password_confirm.clear();
     const bool from_password = sheet == Sheet::Password && !sheet_id.empty();
     sheet = from_password ? Sheet::Network : Sheet::None;
     if (sheet == Sheet::None) { confirm_fn = nullptr; picker_fn = nullptr; }
@@ -1564,9 +1662,11 @@ void move_focus(int dir) {
     }
     for (int i = focus + dir; i >= 0 && i < static_cast<int>(items.size()); i += dir) {
         if (!items[i].focusable()) continue;
-        if (sheet == Sheet::Password || sheet == Sheet::Hidden) {
+        if (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword) {
             if (items[i].key == "in:pw") input_target = 0;
             else if (items[i].key == "in:ssid") input_target = 1;
+            else if (items[i].key == "in:ssh-password") input_target = 2;
+            else if (items[i].key == "in:ssh-confirm") input_target = 3;
             else input_target = -1;
             if (items[i].kind == Kind::Input || items[focus].kind == Kind::Input) sync_list();
         }
@@ -1591,29 +1691,32 @@ void go_back() {
 }
 
 bool typing() {
-    return (sheet == Sheet::Password || sheet == Sheet::Hidden) && focus >= 0 && items[focus].kind == Kind::Input;
+    return (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword) && focus >= 0 && items[focus].kind == Kind::Input;
 }
 
 void physical_key(uint32_t code) {
     if (code == screen::KEY_HOME || code == screen::KEY_HOME_LONG) { screen::quit = true; return; }
     if (code == screen::KEY_EXIT) { go_back(); return; }
-    if (code == screen::KEY_SYMBOL && (sheet == Sheet::Password || sheet == Sheet::Hidden)) {
+    if (code == screen::KEY_SYMBOL && (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword)) {
         show_password = !show_password;
         sync_list();
         return;
     }
-    if (code == screen::KEY_MODE) { if (sheet == Sheet::Password || sheet == Sheet::Hidden) sync_list(); return; }
+    if (code == screen::KEY_MODE) { if (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword) sync_list(); return; }
     const bool enter = code == LV_KEY_ENTER || code == '\r';
     if (typing() && !enter) {
-        std::string &target = input_target == 1 ? hidden_ssid : password;
-        const size_t limit = input_target == 1 ? 32 : 64;
+        std::string *target = &password;
+        size_t limit = 64;
+        if (input_target == 1) { target = &hidden_ssid; limit = 32; }
+        else if (input_target == 2) target = &ssh_password;
+        else if (input_target == 3) target = &ssh_password_confirm;
         if (code == LV_KEY_BACKSPACE || code == 8) {
-            if (!target.empty()) target.pop_back();
+            if (!target->empty()) target->pop_back();
             sync_list();
             return;
         }
         if (code >= 32 && code < 127) {
-            if (target.size() < limit) target.push_back(static_cast<char>(code));
+            if (target->size() < limit) target->push_back(static_cast<char>(code));
             sync_list();
             return;
         }
@@ -1642,8 +1745,10 @@ void item_clicked(lv_event_t *e) {
     if (index < 0 || index >= static_cast<int>(items.size()) || !items[index].focusable()) return;
     zone = Zone::Content;
     auto &it = items[index];
-    if (sheet == Sheet::Password || sheet == Sheet::Hidden) {
+    if (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword) {
         input_target = it.key == "in:pw" ? 0 : it.key == "in:ssid" ? 1 : -1;
+        if (it.key == "in:ssh-password") input_target = 2;
+        else if (it.key == "in:ssh-confirm") input_target = 3;
     }
     if (focus != index || it.kind == Kind::Input) {
         set_focus(index);

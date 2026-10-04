@@ -306,7 +306,7 @@ int main() {
         }
         argv.push_back("-i");
         term.feed("\x1b[36mC1Max Terminal\x1b[0m  |  Symbol + C: interrupt  |  Power: Esc\r\n");
-        term.feed("Commands: help exit ssh scp sshd vi/vim nano less\r\n");
+        term.feed("Commands: help exit ssh scp sshd (password: c1max initially) vi/vim nano less\r\n");
         term.feed("Tools: grep sed awk find tar gzip unzip wget curl sqlite3 ps top\r\n");
         term.feed("BusyBox core utilities are also available; type help for the full terminal list.\r\n");
         if (!pty.start(argv, rows, cols, home, env)) persistent_error = pty.error();

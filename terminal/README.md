@@ -18,8 +18,9 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 - 没有屏幕退出按钮、屏幕键盘或可意外点击的隐藏控件。
 - 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
   `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
-  本机 Dropbear 服务端（默认端口 2222、仅公钥认证），公钥放在
-  `/storage/terminal/dropbear/authorized_keys`；SSH 登录后的 PATH 也包含
+  本机 Dropbear 服务端（默认端口 2222、公钥或密码认证），公钥放在
+  `/storage/terminal/dropbear/authorized_keys`；首次启动默认密码是 `c1max`，
+  可在设置页或终端执行 `sshd password` 修改。SSH 登录后的 PATH 也包含
   `scp` 和其他应用工具；设备的 `vi` 可通过 `vim` 名称调用。
 - 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
   具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：

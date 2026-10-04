@@ -146,6 +146,8 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
   无线通道 = `nc 192.168.4.142 2323`（telnetd，root shell，无认证——限家庭内网调试用）；
 - gadget 配置读取的是 `user.usb.config`；`sys.usb.state=adb` 触发 `start adbd; start mtp`
   （adb 模式下是 adb+mtp 复合）；
+- **smartUI/mp_s300 启停会重新配置 USB gadget，adb 会话必然断开**——每次切原厂/自定义
+  桌面 adb 都会掉一次，属预期；此时 Wi-Fi telnet（2323）仍然可用；
 - 设备真休眠会令 USB gadget 下电（表现为 adb 掉线）——开机默认 `sys.backlight.lock=1`
   已抑制；若用户在设置里自选熄屏超时，息屏/休眠按原厂计时发生（见下「息屏/睡眠策略」）。
 
@@ -160,6 +162,17 @@ inject-and-sign.sh <in.zip> <out.zip> <c1key.pem> <c1key.v2.pub>
   `lock=1` + `timer=0`，超时档 = `lock=0` + 对应毫秒；
 - 设置应用回显以该文件为准，文件不存在才按当前属性推断；
 - 三个 `sys.backlight.*` 属性本身仍是非持久的，重启即丢，持久层只有这个文件。
+
+**原厂设置库 settings.db（息屏踩踏源）**
+- `/usr/data/database/settings.db` 是原厂设置的持久层：**不是 sqlite**——记录以 `0x0a`
+  分隔，每条 = NUL 填充的 ASCII 键 + NUL 填充的 ASCII 值（全机约 1.1KB，十几条）;
+- **mp_s300 每次启动都会重设** `sys.backlight.lock=0`、`sys.backlight.timer=<库值>×1000`
+  ——包括作为我们 launcher 子进程启动（词典入口）时，会盖掉开机重放的策略；
+- 库中相关键：`sys.backlight.timer=60`（秒，出厂值）、`sleep_timeout=180`、
+  `poweroff_time=1800`、`sys.timing.shutdown=15`、`lcd_bright*`、`volume.persent` 等；
+- 调试期已把前三个改为 `86400`（24 小时=实际不息屏/不休眠/不自动关机）：
+  原地把 ASCII 值覆盖进 NUL 填充区、保持记录长度不变即可，mp_s300 下次启动生效；
+- 本机「息屏」= 真休眠：USB gadget 下电、Wi-Fi 断，adb/telnet 全灭，按电源键唤醒。
 
 **原厂隐藏机制**
 - 「关于」页连点「系统版本」≥10 次/5 秒 → 弹 toast 并向

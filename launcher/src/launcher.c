@@ -295,7 +295,7 @@ static int add_app(const char *label,const char *cwd,char **argv,int argc,const 
     struct stat st;a->present=stat(argv[0],&st)==0&&S_ISREG(st.st_mode)&&access(argv[0],X_OK)==0;
     a->color=palette[napps%(sizeof(palette)/sizeof(palette[0]))];napps++;return 1;
 }
-static void load_config(const char *path){
+static void load_config(const char *path,int system_only){
     FILE *fp=fopen(path,"r");if(!fp)return;
     char line[1024];
     while(fgets(line,sizeof(line),fp)){
@@ -318,6 +318,11 @@ static void load_config(const char *path){
              * is also accepted and removes ambiguity with ordinary arguments. */
             if(i==5&&count==6&&(!parts[4][0]||!strncmp(parts[4],"cwd=",4))&&valid_icon_id(parts[i])){icon=parts[i];continue;}
             if(argc>=ARGV_MAX-1){argc=-1;break;}argv[argc++]=parts[i];
+        }
+        if(system_only){
+            if(argc<=0||!powerhome||!strncmp(argv[0],"/storage/apps/",14))continue;
+            int duplicate=0;for(int i=0;i<napps;i++)if(!strcmp(apps[i].argv[0],argv[0]))duplicate=1;
+            if(duplicate)continue;
         }
         if(argc>0&&!add_app(parts[0],cwd,argv,argc,icon))fprintf(stderr,"[launcher] Invalid app entry: %s\n",parts[0]);
         else if(argc>0&&powerhome)apps[napps-1].powerhome=1;
@@ -473,23 +478,25 @@ static void drain_input(void){
  * not steal input from it. Only used for "powerhome" entries (stock binaries
  * that swallow the power key instead of exiting). Bit 0: power pressed;
  * bit 1: back (event1 code 14) held for 2s — mirrors the global hotkey. */
-static int home_key_events(void){
-    static int64_t back_since;
+typedef struct {int64_t back_since;int back_down,ignore_back,dropped[2];} HomeKeys;
+static int home_key_events(HomeKeys *state,int64_t now){
     int power=0;struct input_event e;
     int fds[2]={key_fd,matrix_fd};
     for(int i=0;i<2;i++){
         if(fds[i]<0)continue;
         while(read(fds[i],&e,sizeof e)==sizeof e){
+            if(e.type==EV_SYN&&e.code==SYN_DROPPED){state->dropped[i]=1;state->back_down=0;state->ignore_back=1;continue;}
+            if(state->dropped[i]){if(e.type==EV_SYN&&e.code==SYN_REPORT)state->dropped[i]=0;continue;}
             if(e.type!=EV_KEY)continue;
             if(e.code==KEY_POWER&&e.value==1)power=1;
             else if(fds[i]==key_fd&&e.code==KEY_BACKSPACE){
-                if(e.value==0)back_since=0;
-                else if(!back_since)back_since=now_ms();
+                if(e.value==0){state->back_down=0;state->ignore_back=0;}
+                else if(e.value==1&&!state->back_down&&!state->ignore_back){state->back_down=1;state->back_since=now;}
             }
         }
     }
-    int backhold=back_since&&now_ms()-back_since>=2000;
-    if(backhold)back_since=0;
+    int backhold=state->back_down&&now>=state->back_since&&now-state->back_since>=2000;
+    if(backhold){state->back_down=0;state->ignore_back=1;}
     return power|(backhold?2:0);
 }
 static char base_config[512],store_menu[512],store_root[512];
@@ -497,7 +504,9 @@ static int store_enabled(void){return !getenv("C1_STORE_DISABLE")&&access(store_
 static void reload_apps(void){
     for(int i=0;i<napps;i++)free(apps[i].icon);
     memset(apps,0,sizeof apps);napps=0;
-    load_config(store_enabled()?store_menu:base_config);if(!napps)load_defaults();
+    if(store_enabled()){load_config(store_menu,0);load_config(base_config,1);}
+    else load_config(base_config,0);
+    if(!napps)load_defaults();
     if(selected_app>=napps)selected_app=napps?napps-1:-1;
     if(current_page*PAGE_SIZE>=napps)current_page=0;
 }
@@ -511,6 +520,7 @@ static void launch_app(App *app){
         execv(app->argv[0],app->argv);_exit(127);
     }
     if(child>0){
+        HomeKeys home_keys={0}; /* A new child never inherits an earlier hold. */
         int status=0;setpgid(child,child);
         for(;;){
             pid_t done=waitpid(child,&status,WNOHANG);if(done==child)break;
@@ -518,7 +528,7 @@ static void launch_app(App *app){
             /* Stock binaries never exit on their own: power or a 2s back-hold
              * comes home to the grid (kills only this child; want_quit would
              * exit to the stock desktop). */
-            if(want_quit||(app->powerhome&&home_key_events())){
+            if(want_quit||(app->powerhome&&home_key_events(&home_keys,now_ms()))){
                 kill(-child,SIGTERM);int i;
                 for(i=0;i<30;i++){if(waitpid(child,&status,WNOHANG)==child)break;usleep(100000);}
                 if(i==30){kill(-child,SIGKILL);while(waitpid(child,&status,0)<0&&errno==EINTR){}}

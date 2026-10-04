@@ -36,6 +36,8 @@ NES|/storage/apps/current/streamplayer/c1max-streamplayer|--roms|||nes
 主页键而不是退出。标记后，子进程运行期间按一次电源键、或长按中间返回键 2 秒
 （与全局手势一致），只结束该子进程并返回应用网格（evdev 事件对所有监听者
 多播，子进程仍收到自己的一份）；普通应用保持各自处理电源键的约定，不受影响。
+应用商店生成首页后，launcher 仍保留基础清单中的外部系统 `powerhome` 入口；
+这些入口不作为可下载应用管理，不会把已隐藏的自制应用重新加回首页。
 
 源图保存于 `assets/icons/<id>.png`；构建时转换为固定 **96×96 BGRA**，每个
 文件 **36864 字节**，部署路径为 `launcher/icons/<id>.bgra`。程序不依赖

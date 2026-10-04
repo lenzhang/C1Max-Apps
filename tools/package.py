@@ -67,11 +67,25 @@ for icon in sorted((root/'launcher/assets/icons').glob('*.png')):
         fitted=ImageOps.contain(source.convert('RGBA'),(96,96),Image.Resampling.LANCZOS)
         pixels=Image.new('RGBA',(96,96));pixels.paste(fitted,((96-fitted.width)//2,(96-fitted.height)//2))
         (out/'launcher/icons'/(icon.stem+'.bgra')).write_bytes(pixels.tobytes('raw','BGRA'))
-shutil.copytree(root/'terminal/assets',out/'terminal/assets')
-(out/'terminal/licenses').mkdir()
+shutil.copytree(root/'terminal/assets',out/'terminal/assets',ignore=shutil.ignore_patterns('build'))
+ime_build=root/'.build/rime-data/build'
+for required in ['luna_pinyin_simp.prism.bin','luna_pinyin.table.bin','luna_pinyin_simp.schema.yaml']:
+    if not (ime_build/required).is_file():raise SystemExit('Missing prebuilt IME data: run tools/build_ime_data.py')
+shutil.copytree(ime_build,out/'terminal/assets/rime-data/build')
+shutil.copytree(root/'terminal/licenses',out/'terminal/licenses')
 shutil.copy2(root/'terminal/vendor/libvterm/LICENSE',out/'terminal/licenses/libvterm.txt')
 shutil.copy2(root/'terminal/licenses-term-ime.txt',out/'terminal/licenses/term-ime.txt')
 shutil.copy2(root/'terminal/licenses-term-ime-dict.txt',out/'terminal/licenses/term-ime-dict.txt')
+for source, name in [
+    ('LICENSE','librime-BSD.txt'),
+    ('deps/yaml-cpp/LICENSE','yaml-cpp-MIT.txt'),
+    ('deps/leveldb/LICENSE','leveldb-BSD.txt'),
+    ('deps/marisa-trie/COPYING.md','marisa.txt'),
+    ('deps/opencc/LICENSE','OpenCC-Apache-2.0.txt'),
+    ('deps/opencc/deps/marisa-0.2.6/COPYING.md','OpenCC-marisa.txt'),
+]:
+    shutil.copy2(root/'.deps/librime'/source,out/'terminal/licenses'/name)
+
 shutil.copy2(root/'.build/mips/c1max-psx-core',out/'pcsx4all')
 shutil.copytree(root/'pcsx4all/licenses',out/'pcsx4all/licenses')
 shutil.copy2(root/'pcsx4all/README.md',out/'pcsx4all')

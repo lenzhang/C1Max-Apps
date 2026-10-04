@@ -109,7 +109,7 @@ build_dropbear() {
     cat > localoptions.h <<'EOF'
 #define DROPBEAR_SVR_PASSWORD_AUTH 1
 #define HAVE_CRYPT 1
-#define C1MAX_PASSWORD_HASH_FILE "/storage/apps/data/terminal/dropbear/password.hash"
+#define C1MAX_PASSWORD_HASH_FILE "/storage/terminal/dropbear/password.hash"
 #define DEFAULT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/bin:/bin"
 #define DEFAULT_ROOT_PATH "/storage/apps/current/terminal/assets/bin:/storage/apps/current/linux-tools/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EOF

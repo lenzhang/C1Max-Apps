@@ -98,8 +98,8 @@ void draw(lv_event_t *event) {
 }
 void set_status(const std::string &shell_state = {}) {
     std::string text;
-    if (!persistent_error.empty()) text = persistent_error + "  |  Power: Esc";
-    else if (!shell_state.empty()) text = shell_state + "  |  Power: Esc";
+    if (!persistent_error.empty()) text = persistent_error + "  |  Power: home";
+    else if (!shell_state.empty()) text = shell_state + "  |  Power: home";
     else {
         if (ime && ime->ready() && ime->mode() == c1ime::Mode::Chinese) {
             text = "拼 ";
@@ -130,7 +130,7 @@ void send_terminal_text(const std::string &text) {
 void route_terminal_output(const std::string &output) {
     if (output.empty() || !shell_pty) return;
     if (pending_ctrl_a) {
-        if (output == " ") {
+        if (output == " " && ime && ime->ready()) {
             pending_ctrl_a = false;
             if (ime && ime->ready()) { ime->toggle_mode(); ime_error.clear(); }
             return;
@@ -154,6 +154,17 @@ bool ime_key(uint32_t code) {
         ime->toggle_mode();
         return true;
     }
+    if (state != c1ime::State::Inactive && input.mode() == terminal::Input::Mode::Navigation) {
+        const auto lower = code >= 'A' && code <= 'Z' ? code + ('a' - 'A') : code;
+        if (lower == 'w' || lower == 'a' || lower == 'z' ||
+            lower == 's' || lower == 'd' || lower == 'x') {
+            input.escape(*model);  // consume the one-shot navigation prefix
+            if (lower == 'w' || lower == 'a' || lower == 'z') ime->page_up();
+            else ime->page_down();
+            return true;
+        }
+    }
+    if (input.mode() != terminal::Input::Mode::Text) return false;
     if (state != c1ime::State::Inactive) {
         if (code >= '1' && code <= '9') {
             send_terminal_text(ime->select(static_cast<int>(code - '1')));
@@ -186,15 +197,10 @@ bool ime_key(uint32_t code) {
 
 void key(uint32_t code) {
     if(code==screen::KEY_FONT_UP||code==screen::KEY_FONT_DOWN){resize_font(code==screen::KEY_FONT_UP?2:-2);return;}
-    if (code == screen::KEY_HOME) {
-        // The terminal keeps the power key available as an Escape key. Keep
-        // the middle Back key as the same Escape alias for compatibility.
-        if (ime_key(LV_KEY_ESC)) return;
-        input.escape(*model);
-        return;
-    }
+    if (code == screen::KEY_HOME || code == screen::KEY_HOME_LONG) { screen::quit = true; return; }
     if (code == screen::KEY_MODE) { caps = screen::caps_lock(); return; }
     if (code == screen::KEY_SYMBOL) { input.symbol(); return; }
+    if (pending_ctrl_a && code != ' ') { send_terminal_text("\x01"); pending_ctrl_a = false; }
     if (ime_key(code)) return;
     if (code == screen::KEY_EXIT || code == LV_KEY_ESC) { input.escape(*model); return; }
     switch (code) {
@@ -305,8 +311,8 @@ int main() {
             argv.push_back("--noprofile"); argv.push_back("--rcfile"); argv.push_back(assets + "shellrc");
         }
         argv.push_back("-i");
-        term.feed("\x1b[36mC1Max Terminal\x1b[0m  |  Symbol + C: interrupt  |  Power: Esc\r\n");
-        term.feed("Commands: help exit ssh scp sshd (password: c1max initially) vi/vim nano less\r\n");
+        term.feed("\x1b[36mC1Max Terminal\x1b[0m  |  Symbol + C: interrupt  |  Power: home\r\n");
+        term.feed("Commands: help exit ssh scp sshd (configure authentication first) vi/vim nano less\r\n");
         term.feed("Tools: grep sed awk find tar gzip unzip wget curl sqlite3 ps top\r\n");
         term.feed("BusyBox core utilities are also available; type help for the full terminal list.\r\n");
         if (!pty.start(argv, rows, cols, home, env)) persistent_error = pty.error();
@@ -320,7 +326,7 @@ int main() {
                 route_terminal_output(term.take_output());
             }
             if (screen::quit || interrupted) break;
-            if (pending_ctrl_a && uint32_t(screen::tick() - pending_ctrl_a_at) > 220) {
+            if (pending_ctrl_a && uint32_t(screen::tick() - pending_ctrl_a_at) > 1500) {
                 send_terminal_text("\x01");
                 pending_ctrl_a = false;
             }

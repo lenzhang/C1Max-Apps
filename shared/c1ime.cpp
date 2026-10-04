@@ -68,29 +68,15 @@ bool Engine::initialize() {
     impl_->api->setup(&traits);
     impl_->api->initialize(nullptr);
 
-    // The bundled package carries prebuilt prism/table files.  Building the
-    // 3.6 MiB essay dictionary on the 103 MiB device can peak above 80 MiB,
-    // so only fall back to Rime's maintenance compiler for development packs
-    // that deliberately omit the prebuilt directory.
+    // Never compile dictionaries on the 128 MB device. The build pipeline
+    // prepares these with the target deployer under QEMU on the build host.
     const auto prebuilt_dir = fs::path(impl_->shared_dir) / "build";
-    const bool has_prebuilt =
-        fs::exists(prebuilt_dir / "luna_pinyin_simp.prism.bin", ec) &&
-        fs::exists(prebuilt_dir / "luna_pinyin.table.bin", ec);
-    if (!has_prebuilt && impl_->api->start_maintenance &&
-        impl_->api->start_maintenance(True))
-        impl_->api->join_maintenance_thread();
-    if (!has_prebuilt && impl_->api->deploy_schema) {
-        for (const auto &entry : fs::directory_iterator(impl_->shared_dir, ec)) {
-            if (ec) break;
-            const auto name = entry.path().filename().string();
-            constexpr const char *suffix = ".schema.yaml";
-            constexpr size_t suffix_length = 12;
-            if (name.size() < suffix_length || name.rfind(suffix) != name.size() - suffix_length)
-                continue;
-            const auto schema_id = name.substr(0, name.size() - suffix_length);
-            const auto prism = fs::path(staging) / (schema_id + ".prism.bin");
-            if (!fs::exists(prism, ec)) impl_->api->deploy_schema(entry.path().c_str());
-        }
+    if (!fs::exists(prebuilt_dir / "luna_pinyin_simp.prism.bin", ec) ||
+        !fs::exists(prebuilt_dir / "luna_pinyin.table.bin", ec) ||
+        !fs::exists(prebuilt_dir / "luna_pinyin_simp.schema.yaml", ec)) {
+        impl_->error = "prebuilt IME data missing; update the terminal package";
+        impl_->api->finalize(); impl_->api = nullptr;
+        return false;
     }
     impl_->session = impl_->api->create_session();
     if (!impl_->session) {

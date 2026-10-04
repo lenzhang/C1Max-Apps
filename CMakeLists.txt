@@ -82,7 +82,7 @@ if(NOT EXISTS "${_C1_RIME_STAMP}")
         -DYAML_CPP_INSTALL=ON RESULT_VARIABLE _c1_rime_rc)
     if(_c1_rime_rc EQUAL 0)
         execute_process(COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}/_c1_rime_build/yaml-cpp"
-            --target install -j RESULT_VARIABLE _c1_rime_rc)
+            --target install -j4 RESULT_VARIABLE _c1_rime_rc)
     endif()
     if(_c1_rime_rc EQUAL 0)
         execute_process(COMMAND ${CMAKE_COMMAND} -S "${_C1_RIME_SOURCE}/deps/leveldb"
@@ -90,7 +90,7 @@ if(NOT EXISTS "${_C1_RIME_STAMP}")
             -DLEVELDB_BUILD_TESTS=OFF -DLEVELDB_BUILD_BENCHMARKS=OFF RESULT_VARIABLE _c1_rime_rc)
         if(_c1_rime_rc EQUAL 0)
             execute_process(COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}/_c1_rime_build/leveldb"
-                --target install -j RESULT_VARIABLE _c1_rime_rc)
+                --target install -j4 RESULT_VARIABLE _c1_rime_rc)
         endif()
     endif()
     if(_c1_rime_rc EQUAL 0)
@@ -98,7 +98,7 @@ if(NOT EXISTS "${_C1_RIME_STAMP}")
             -B "${CMAKE_BINARY_DIR}/_c1_rime_build/marisa" ${_C1_RIME_COMMON} RESULT_VARIABLE _c1_rime_rc)
         if(_c1_rime_rc EQUAL 0)
             execute_process(COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}/_c1_rime_build/marisa"
-                --target install -j RESULT_VARIABLE _c1_rime_rc)
+                --target install -j4 RESULT_VARIABLE _c1_rime_rc)
         endif()
     endif()
     if(_c1_rime_rc EQUAL 0)
@@ -111,7 +111,7 @@ if(NOT EXISTS "${_C1_RIME_STAMP}")
             # Rime only needs the static library and headers; the runtime
             # dictionaries are already bundled in terminal/assets/rime-data.
             execute_process(COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}/_c1_rime_build/opencc"
-                --target libopencc -j RESULT_VARIABLE _c1_rime_rc)
+                --target libopencc -j4 RESULT_VARIABLE _c1_rime_rc)
             if(_c1_rime_rc EQUAL 0)
                 file(MAKE_DIRECTORY "${_C1_RIME_STAGE}/lib" "${_C1_RIME_STAGE}/include/opencc")
                 execute_process(COMMAND ${CMAKE_COMMAND} -E copy
@@ -145,6 +145,12 @@ add_subdirectory("${_C1_RIME_SOURCE}" "${CMAKE_BINARY_DIR}/librime" EXCLUDE_FROM
 add_library(c1ime STATIC shared/c1ime.cpp)
 target_include_directories(c1ime PUBLIC shared "${_C1_RIME_SOURCE}/include" "${_C1_RIME_SOURCE}/src")
 target_link_libraries(c1ime PUBLIC rime-static pthread)
+add_executable(rime_deployer EXCLUDE_FROM_ALL tools/ime_deploy.cpp)
+target_link_libraries(rime_deployer PRIVATE c1ime)
+set_target_properties(rime_deployer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/librime/bin")
+add_executable(c1ime-test EXCLUDE_FROM_ALL terminal/tests/ime_test.cpp)
+target_compile_options(c1ime-test PRIVATE -UNDEBUG)
+target_link_libraries(c1ime-test PRIVATE c1ime)
 
 add_subdirectory(terminal)
 set_target_properties(c1max-terminal PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

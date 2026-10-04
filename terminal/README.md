@@ -12,22 +12,22 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
   底部 `abc` / `CAPS` 显示当前状态。
 - 设备没有独立数字行，数字在 `Q W E R T Y U I O P` 键帽上方；按住 Shift 再按首排
   字母即可输入 `1 2 3 4 5 6 7 8 9 0`。例如候选栏要选第 3 项，按 `Shift+E`。
-- 右上退格为终端 DEL 字节；确认发送回车。中间返回和电源键都发送 Escape；在前缀模式中
-  返回只取消前缀。电源键在终端里不退出应用。
+- 右上退格为终端 DEL 字节；确认发送回车。中间返回发送 Escape；在前缀模式中
+  返回只取消前缀。电源键返回 launcher。
 - 输入 `exit`（或按 Ctrl-D）结束交互式 Shell，终端随即回到 launcher。
 - 没有屏幕退出按钮、屏幕键盘或可意外点击的隐藏控件。
 - 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
   `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
   本机 Dropbear 服务端（默认端口 2222、公钥或密码认证），公钥放在
-  `/storage/terminal/dropbear/authorized_keys`；首次启动默认密码是 `c1max`，
-  可在设置页或终端执行 `sshd password` 修改。SSH 登录后的 PATH 也包含
+  `/storage/terminal/dropbear/authorized_keys`；没有统一默认密码，
+  启动前须在设置页或用 `sshd password` 设置密码，或用 `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
   `scp` 和其他应用工具；设备的 `vi` 可通过 `vim` 名称调用。
 - 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
   具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：
   `相机图标键` → `A` → `空格`，也就是文档中写的 `Ctrl-A Space`；不需要寻找或按
   屏幕上的 Ctrl 键。底部状态栏会显示 `拼` 或 `abc`。中文模式下输入拼音，空格选首个
   候选，数字 `1`–`9` 选候选，右上退格删除拼音，回车提交当前候选。候选和拼音显示在
-  底部状态栏。这是终端内置输入，不会改变 launcher 或其他应用的系统输入法。
+  底部状态栏；有候选时“符号两次 + Z / X”翻上一页／下一页候选。这是终端内置输入，不会改变 launcher 或其他应用的系统输入法。
 
 “符号”键是一次性前缀，后续操作结束自动恢复普通输入。再按一次可轮换模式：
 
@@ -113,7 +113,8 @@ PTY 使用 `posix_openpt`、`setsid`、控制终端和规范行规程，窗口�
 `c1ime` 使用 pinned 的 librime 静态库和内置 Rime 数据，不依赖设备侧
 Rime/IBus/Fcitx。公开设备包在 `assets/rime-data/build/` 随附预编译的
 prism/table 文件，避免在 103 MiB 设备上首次启动时编译大词典；缺少这组文件的
-开发包仍会回退到 `$C1_APPS_DATA/terminal/rime/build` 维护构建。
+开发包会提示缺少词库并继续英文输入，不在设备上编译。
+`tools/build.sh` 用静态 MIPS deployer 在构建机 QEMU 中生成这组文件；打包前必须存在。
 libvterm 的九个 C 源文件和生成表已随源码提供，无需联网获取、libtool 或 ncurses。
 父项目统一提供静态 MIPS32r2/glibc 工具链和 `shared/display.cpp`、`keyboard.cpp`。
 
@@ -125,7 +126,7 @@ terminal/
   assets/                  # 整目录，包括字体、terminfo、inputrc、shellrc、help 和命令入口
   licenses/libvterm.txt     # 从 vendor/libvterm/LICENSE 拷贝
   licenses/term-ime.txt     # term-ime/Rime 集成许可
-  licenses/term-ime-dict.txt # 内置拼音词典许可
+  licenses/term-ime-dict.txt # 词库分发仓库许可；原始 Rime 数据许可见同目录 rime-*.txt
 ```
 
 依赖 `shared/NotoSansSC-Regular.ttf`。JetBrains Mono 字体来自本机 CardputerZero
@@ -140,8 +141,8 @@ libvterm 官方发布地址、版本和 SHA-256 见 `vendor/README.md`。
 规范模式退格、14×80 尺寸、Ctrl-C 中断 `sleep` 后 Shell 继续、正常退出、错误
 执行、抗 HUP/TERM 进程升级终止和 waitpid 回收。
 
-`tools/check_mips.py` 在 builder 容器内使用既有 LVGL archive 做独立静态链接
-检查，不重配父项目。`tools/inventory.sh` 是设备上可运行的只读工具/PTY清单，
+`tools/check_mips.py` 在 builder 容器内构建并检查实际的终端目标
+（包含 Rime 和依赖），要求已经配置父项目 `.build/mips`。`tools/inventory.sh` 是设备上可运行的只读工具/PTY清单，
 不会自行调用 ADB、安装或修改系统。
 
 `tests/render.sh /absolute/output.ppm` 使用测试显示后端，运行实际应用、真实
@@ -149,7 +150,7 @@ PTY 和 LVGL 软件渲染，产生 800×340 离屏图像；不需要设备、SDL
 追加 `--refresh` 可检查四轮定时 ANSI 输出产生不同完整画面，期间不发送后续按键。
 已在宿主机检查英文等宽列、中文双格、粗体、下划线、256 色/真彩色和状态提示。
 原生解析/PTY测试已在 macOS 及 Debian Bookworm 容器通过；静态 MIPS32r2
-链接检查输出约 1.25 MB 可执行文件。这些构建产物均为临时验证文件。
+链接检查应包含当前 Rime 静态依赖。这些构建产物均为临时验证文件。
 
 以上宿主机测试不能替代设备上的键码、字体可读性、显存和全屏编辑器验证。
 
@@ -167,3 +168,5 @@ tar、gzip、unzip、sqlite3、ps、top、df、du、ping 和 nc 等高频命令�
 或 readelf；已有 BusyBox 命令不必重复覆盖。统一放 apps 下的 linux-tools，避免覆盖 /bin。
 
 Shift + 音量＋／－可将正文字号在 12–28 px 之间调整，同时更新 PTY 行列数；不改变系统音量，不增加界面提示。
+
+输入法集成测试：构建 `c1ime-test`，用生成的词库在 QEMU 下验证真实拼音候选、中文提交、编辑与缺词库回退；离屏渲染测试使用输入法 stub，不替代此测试。

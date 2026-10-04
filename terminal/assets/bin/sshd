@@ -11,9 +11,8 @@ server="$root/linux-tools/bin/dropbear"
 keygen="$root/linux-tools/bin/dropbearkey"
 key="$data/dropbear_ed25519_host_key"
 authorized="$auth/authorized_keys"
-password_hash="$data/password.hash"
+password_hash="$auth/password.hash"
 cryptpw=/usr/bin/cryptpw
-default_password=c1max
 pidfile="$data/dropbear.pid"
 identity="$data/dropbear.identity"
 runport="$data/running-port"
@@ -94,29 +93,24 @@ atomic_write() {
 }
 valid_password_hash() {
     candidate=${1:-$password_hash}
-    [ -s "$candidate" ] || return 1
+    [ -f "$candidate" ] && [ ! -L "$candidate" ] && [ -s "$candidate" ] || return 1
+    [ "$(stat -c %u "$candidate")" = 0 ] || return 1
+    mode=$(stat -c %a "$candidate") || return 1
+    [ "$((0$mode & 077))" = 0 ] || return 1
     hash=$(awk 'NR == 1 { print; exit }' "$candidate" 2>/dev/null || true)
     case "$hash" in
         '$5$'*|'$6$'*) [ "${#hash}" -ge 20 ] && [ "${#hash}" -le 255 ] ;;
         *) return 1 ;;
     esac
 }
-ensure_password_hash() {
-    [ ! -L "$password_hash" ] || fail 'password hash must not be a symlink'
-    if ! valid_password_hash; then
-        [ -x "$cryptpw" ] || fail 'cryptpw is missing; cannot initialize SSH password'
-        printf '%s' "$default_password" | "$cryptpw" -P 0 -m sha512 > "$password_hash.tmp" || fail 'default SSH password initialization failed'
-        chmod 600 "$password_hash.tmp"
-        valid_password_hash "$password_hash.tmp" || fail 'generated SSH password hash is invalid'
-        mv "$password_hash.tmp" "$password_hash"
-    fi
-    chmod 600 "$password_hash"
-}
 set_password() {
+    prepare
     [ -x "$cryptpw" ] || fail 'cryptpw is missing; cannot set SSH password'
     first=''; second=''; tty_state=''
     if tty_state=$(stty -g 2>/dev/null); then
         printf 'New SSH password: ' >&2
+        trap 'stty "$tty_state" 2>/dev/null || true' EXIT
+        trap 'exit 1' HUP INT TERM
         stty -echo
         IFS= read -r first || true
         stty "$tty_state"
@@ -125,6 +119,7 @@ set_password() {
         IFS= read -r second || true
         stty "$tty_state"
         printf '\n' >&2
+        trap - EXIT HUP INT TERM
     else
         IFS= read -r first || fail 'provide the new password twice on stdin'
         IFS= read -r second || fail 'provide the new password twice on stdin'
@@ -159,7 +154,10 @@ start_server() {
     fi
     [ -x "$server" ] && [ -x "$keygen" ] || fail 'Dropbear tools are missing from this release'
     prepare
-    ensure_password_hash
+    # No shared default password. Require an explicitly configured credential.
+    if ! valid_password_hash && [ "$(key_count)" = 0 ]; then
+        fail 'set a password with sshd password or import a public key before starting'
+    fi
     [ ! -L "$key" ] || fail 'host key must not be a symlink'
     if [ ! -s "$key" ]; then
         "$keygen" -t ed25519 -f "$key.new" > "$data/keygen.log" 2>&1 || fail "host-key generation failed; see $data/keygen.log"
@@ -240,7 +238,7 @@ authorize() {
         }
         END { if(bad || !n || n>16) exit 1 }
     ' "$2" > "$data/import.tmp" || { rm -f "$data/import.tmp"; fail 'invalid public key file; expected 1-16 Ed25519 public keys'; }
-    awk 'NR==FNR {seen[$2]=1; print; next} !seen[$2]++ {print}' "$authorized" "$data/import.tmp" > "$authorized.tmp"
+    awk 'FILENAME==ARGV[1] {seen[$2]=1; print; next} !seen[$2]++ {print}' "$authorized" "$data/import.tmp" > "$authorized.tmp"
     chmod 600 "$authorized.tmp"
     mv "$authorized.tmp" "$authorized"
     rm -f "$data/import.tmp"

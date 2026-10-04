@@ -29,6 +29,8 @@ docker run --rm -e C1_LOCAL_APPS="$LOCAL_APPS" -v "$APPS:/work" "$BUILDER" sh -e
   cp /etc/ssl/certs/ca-certificates.crt .build/ca-certificates.crt
   cmake -S . -B .build/mips -DCMAKE_TOOLCHAIN_FILE=tools/mipsel.cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DC1_BUILD_LOCAL_APPS="$C1_LOCAL_APPS"
   cmake --build .build/mips -j4
+  cmake --build .build/mips --target rime_deployer -j4
+  python3 tools/build_ime_data.py .build/mips/librime/bin/rime_deployer
   if [ "$C1_LOCAL_APPS" = ON ]; then
     python3 tools/package.py --source-list .build/package-sources --local
   else

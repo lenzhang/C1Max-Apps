@@ -104,7 +104,14 @@ std::string apps_root_dir() {
 std::string sshd_data_dir() { return apps_data_dir() + "/terminal/dropbear"; }
 std::string sshd_enabled_file() { return sshd_data_dir() + "/enabled"; }
 std::string sshd_pid_file() { return sshd_data_dir() + "/dropbear.pid"; }
-std::string sshd_password_file() { return sshd_data_dir() + "/password.hash"; }
+std::string sshd_port(bool live = false) {
+    const auto value = first_line(read_file((sshd_data_dir() + (live ? "/running-port" : "/port")).c_str(), 16));
+    if (value.empty()) return "2222";
+    if (value.size() > 5 || value[0] == '0' || value.find_first_not_of("0123456789") != std::string::npos) return "无效";
+    const auto port = std::strtol(value.c_str(), nullptr, 10);
+    return port >= 1024 && port <= 65535 ? value : "无效";
+}
+std::string sshd_password_file() { const char *p=std::getenv("C1_SSH_AUTH_DIR"); return std::string(p&&*p?p:"/storage/terminal/dropbear")+"/password.hash"; }
 
 bool sshd_running() {
     const std::string text = first_line(read_file(sshd_pid_file().c_str(), 32));
@@ -118,7 +125,8 @@ bool sshd_running() {
     const ssize_t length = ::readlink(proc_exe.c_str(), executable, sizeof executable - 1);
     if (length <= 0) return false;
     executable[length] = '\0';
-    const std::string path(executable);
+    std::string path(executable);
+    if (path.size() > 10 && path.compare(path.size()-10, 10, " (deleted)") == 0) path.resize(path.size()-10);
     constexpr const char *suffix = "/linux-tools/bin/dropbear";
     const size_t suffix_length = std::strlen(suffix);
     return path.size() >= suffix_length && path.compare(path.size() - suffix_length, suffix_length, suffix) == 0;
@@ -592,8 +600,9 @@ bool save_sshd_password(const std::string &first, const std::string &second) {
     }
     ::close(pipefd[1]);
     int status = 0;
-    while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
-    const bool ok = sent == input.size() && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    pid_t waited;
+    do { waited = ::waitpid(pid, &status, 0); } while (waited < 0 && errno == EINTR);
+    const bool ok = waited == pid && sent == input.size() && WIFEXITED(status) && WEXITSTATUS(status) == 0;
     if (!ok) show_toast("SSH 密码保存失败，请检查终端日志", 5000);
     return ok;
 }
@@ -641,7 +650,7 @@ void poll_sshd_action() {
     const bool want_running = sshd_action_name == "start";
     const bool state_ok = sshd_running() == want_running;
     if (exited && state_ok) {
-        show_toast(want_running ? "SSH 服务已启动（端口 2222）" : "SSH 服务已停止");
+        show_toast(want_running ? "SSH 服务已启动（端口 " + sshd_port(true) + "）" : "SSH 服务已停止");
     } else {
         show_toast(want_running ? "SSH 服务启动失败，请检查终端日志" : "SSH 服务停止失败，请检查终端日志", 5000);
     }
@@ -1152,18 +1161,18 @@ std::vector<Item> ssh_page() {
     service.accent = !on && !busy;
     service.danger = on && !busy;
     v.push_back(std::move(service));
-    v.push_back(info("端口", "2222"));
-    v.push_back(info("认证", sshd_password_configured() ? "公钥 + 密码" : "公钥 + 密码（默认 c1max）"));
+    v.push_back(info("端口", sshd_port(on)));
+    v.push_back(info("认证", sshd_password_configured() ? "公钥 + 密码" : "公钥（需先导入）"));
     if (on) {
         const std::string ip = wifi.ip.empty() ? read_wifi().ip : wifi.ip;
-        v.push_back(info("电脑上运行", ip.empty() ? "未连接 WLAN" : "ssh -p 2222 root@" + ip));
+        v.push_back(info("电脑上运行", ip.empty() ? "未连接 WLAN" : "ssh -p " + sshd_port(true) + " root@" + ip));
     }
     const bool configured = sshd_password_configured();
-    v.push_back(action("password", "设置 SSH 密码", configured ? "已设置" : "默认 c1max", [] { open_sheet(Sheet::SshPassword); }));
+    v.push_back(action("password", "设置 SSH 密码", configured ? "已设置" : "未设置", [] { open_sheet(Sheet::SshPassword); }));
     v.push_back(action("autostart", "开机自动启动", auto_start ? "已开启" : "未开启", [auto_start] {
                            set_sshd_auto_start(!auto_start);
                        }));
-    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。首次启动默认密码为 c1max，可在此修改；密码只保存哈希。"));
+    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。先设置密码或导入公钥后再启动；没有统一默认密码，只保存密码哈希。"));
     return v;
 }
 

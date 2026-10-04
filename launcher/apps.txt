@@ -4,8 +4,8 @@ StreamPlayer|/storage/apps/current/streamplayer/c1max-streamplayer||||streamplay
 计算器|/storage/apps/current/calculator/c1max-calculator||||calculator
 设置|/storage/apps/current/settings/c1max-settings||||settings
 钢琴|/storage/apps/current/piano/c1max-piano||||piano
-NES 游戏|/storage/apps/current/streamplayer/c1max-streamplayer|--roms|||nes
-应用更新|/storage/apps/current/streamplayer/c1max-streamplayer|--updates|||updates
+NES 游戏|/storage/apps/current/nes/c1max-nes-browser|--roms|||nes
+应用商店|/storage/apps/current/appstore/c1max-appstore||||updates
 终端|/storage/apps/current/terminal/c1max-terminal||||terminal
 五子棋|/storage/apps/current/gomoku/c1max-gomoku||||gomoku
 PCSX4all|/storage/apps/current/pcsx4all/c1max-pcsx4all||||pcsx4all
@@ -18,3 +18,4 @@ CrossPoint|/storage/apps/current/crosspoint/c1max-crosspoint||||crosspoint
 Bilibili|/storage/apps/current/bilibili/c1max-bilibili||||bilibili
 HID 键鼠|/storage/apps/current/hidpilot/c1max-hidpilot||||hidpilot
 MoonPilot AI|/storage/apps/current/moonpilot/c1max-moonpilot||||moonpilot
+Tox 聊天|/storage/apps/current/tox/c1max-tox||||tox

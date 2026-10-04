@@ -27,5 +27,14 @@
     "url": "https://github.com/moonlight-stream/moonlight-embedded.git",
     "commit": "f32e415aea6797d261d6b470dcf8bf18727341c2",
     "submodules": true
+  },
+  "c-toxcore": {
+    "url": "https://github.com/TokTok/c-toxcore.git",
+    "commit": "da26052603369045dceb5dfc8c89919b222d0ce0",
+    "submodules": true
+  },
+  "quirc": {
+    "url": "https://github.com/dlbeer/quirc.git",
+    "commit": "927d680904dc95fdff4cd9d022eb374b438ff8f2"
   }
 }

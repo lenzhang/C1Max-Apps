@@ -151,8 +151,17 @@ add_executable(c1max-moonpilot-frame-test EXCLUDE_FROM_ALL moonpilot/tests/frame
 target_include_directories(c1max-moonpilot-frame-test PRIVATE streamplayer/src)
 target_compile_options(c1max-moonpilot-frame-test PRIVATE -UNDEBUG)
 
+add_subdirectory(tox)
+
 # Optional applications stay local; a clean checkout builds only public apps.
 option(C1_BUILD_LOCAL_APPS "Build applications from ignored local configuration" OFF)
 if(C1_BUILD_LOCAL_APPS)
     include("${CMAKE_CURRENT_SOURCE_DIR}/config/apps.local.cmake" OPTIONAL)
 endif()
+
+add_library(c1store STATIC appstore/src/store.cpp)
+target_include_directories(c1store PUBLIC appstore/src)
+target_link_libraries(c1store PUBLIC c1net mbedcrypto)
+add_executable(c1max-appstore appstore/src/main.cpp shared/display.cpp shared/keyboard.cpp)
+target_include_directories(c1max-appstore PRIVATE .deps/lvgl/src/libs/tiny_ttf)
+target_link_libraries(c1max-appstore c1store lvgl m)

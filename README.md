@@ -185,7 +185,7 @@ python3 ./tools/deploy.py --serial MagicPen-931f06 --start
 adb -s MagicPen-931f06 shell 'nohup setsid /storage/apps/current/launcher/run.sh </dev/null >/storage/apps/data/launcher/run.log 2>&1 & sleep 1'
 ```
 
-设备端快捷入口：安装后，在原装界面按住 **Shift＋右下角回车至少 1.5 秒，再松开**。短按不触发。安装命令：
+设备端快捷入口：安装后，在原装界面按住 **Shift＋右下角回车至少 1.5 秒（到点触发，不用松手）**。短按不触发。安装命令：
 
 ```sh
 python3 ./tools/hotkey_service.py install --serial MagicPen-931f06

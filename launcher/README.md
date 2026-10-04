@@ -36,6 +36,8 @@ NES|/storage/apps/current/streamplayer/c1max-streamplayer|--roms|||nes
 主页键而不是退出。标记后，子进程运行期间按一次电源键、或长按中间返回键 2 秒
 （与全局手势一致），只结束该子进程并返回应用网格（evdev 事件对所有监听者
 多播，子进程仍收到自己的一份）；普通应用保持各自处理电源键的约定，不受影响。
+应用商店生成首页后，launcher 仍保留基础清单中的外部系统 `powerhome` 入口；
+这些入口不作为可下载应用管理，不会把已隐藏的自制应用重新加回首页。
 
 源图保存于 `assets/icons/<id>.png`；构建时转换为固定 **96×96 BGRA**，每个
 文件 **36864 字节**，部署路径为 `launcher/icons/<id>.bgra`。程序不依赖
@@ -67,14 +69,11 @@ PNG 解码库，支持透明通道；图标缺失或长度错误时显示备用�
 
 `desktop-service.sh` 是 init 一次性服务：等 smartUI 稳定后启动自定义桌面，
 用心跳文件判定 launcher 真的拿到 framebuffer，拿不到就回退原厂 UI。
-`/storage/apps/data/launcher/adb.onboot` 存在时（调试便利总开关）额外开启 ADB，
-并按 `/storage/apps/data/settings/screenoff`（设置应用写入的 `lock=`/`timer=`
-两行）重放息屏偏好，缺行跳过对应项，最后重置一次原厂空闲计时
-（`sys.backlight.timer.reset`）。文件不存在时回退调试默认
-`sys.backlight.lock=1`（屏幕常亮）。息屏策略是用户偏好，设置应用可随时改，
-重启后保持；`adb.onboot` 本身不再强制屏幕常亮。
-设置应用的 SSH 页使用 `/storage/apps/data/terminal/dropbear/enabled` 保存开机启动偏好；
-该标志存在时，desktop-service.sh 会在自定义桌面启动前后台启动 Dropbear，服务端口为 2222。
+`/storage/apps/data/launcher/adb.onboot` 只控制开机 ADB。
+息屏偏好独立读取 `/storage/apps/data/settings/screenoff`（设置应用写入的
+`lock=`/`timer=` 两行），校验完整后先应用超时、再应用锁并重置空闲计时。
+没有有效偏好时保留原厂设置，不默认强制常亮；「永不」不把超时写成 0。
+设置页显示实际生效的属性，保存失败会明确提示。
 
 分页、末页选择和手势互斥逻辑可在电脑直接测试，无需连接设备：
 

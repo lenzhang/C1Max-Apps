@@ -10,6 +10,8 @@ C1Max Terminal 常用命令
   sshd password             设置 SSH 登录密码（无统一默认密码）
   sshd port N               设置端口（1024–65535）
   curl URL                HTTP/HTTPS 请求、下载和 API 调试
+  语音输入                设置中配置后，点击右下角“语音”开始，再点“结束”完成
+                          符号键 + V 也可开始/结束；说话时显示暂定文字，完成后插入
 
 编辑和查看
   vi FILE                  BusyBox vi 编辑器
@@ -35,3 +37,4 @@ C1Max Terminal 常用命令
 说明
   /bin 下的 BusyBox 多调用程序也都在 PATH 中，可用 `busybox --list` 查看完整列表。
   终端内置快捷键见 terminal/README.md；相机图标键是 Symbol 前缀键。
+  终端主体可触摸上下滑动查看历史，滑回底部恢复实时输出；语音接口见 docs/terminal-voice.md。

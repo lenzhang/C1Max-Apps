@@ -46,7 +46,8 @@ agent
 - [x] C1Max 增加 `agent` SSH attach 命令和默认目标配置。
 - [x] C1Max Dropbear 增加可恢复的默认密码路径。
 - [x] C1Max 增加按 SSH 活动和供电状态管理的 PowerManager suspend lock。
-- [ ] 设备唤醒后重新部署镜像，验证 `sshd start/status`、`agent`、detach/reattach 和休眠/唤醒。
-- [ ] 在真机上记录 SSH 会话期间的内存、电池和 Wi-Fi 恢复时间，决定是否把 5 分钟写成新设备的推荐默认值。
+- [x] 设备唤醒后重新部署镜像，验证 `sshd status`、`agent configure`，并确认 PowerManager 重启后守护锁仍然有效。
+- [x] 真机空闲验证：外部供电时连续约 80 秒无 SSH 会话，USB/ADB、Ping、2222 端口均保持可达；`c1max-power-guard` RSS 约 608 KB。
+- [ ] 继续测量长时间 SSH 会话下的电池消耗和 Wi-Fi 恢复时间，再决定是否把 5 分钟写成新设备的推荐默认值。
 
 项目不把任何私有主机地址、模型密钥、SSH 私钥或服务密码编译进设备包；服务器目标由用户在设备上通过 `agent configure` 自行设置。

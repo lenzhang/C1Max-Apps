@@ -32,7 +32,7 @@ agent
 
 ## 电源策略
 
-设备端新增轻量 `c1max-power-guard`，由 launcher 启动。它通过 vendor `PowerManager` 的 `/dev/socket/PowerLock` 建立 per-client `suslock`，在本地 Dropbear 有入站会话或 Terminal 启动了 `dbclient/ssh/scp` 时持有锁；SSH 断开后立即释放。这样远程 Coding 时不会因为深度休眠丢掉交互连接，闲置且没有 SSH 时仍允许系统深度休眠，电源键可以正常唤醒。
+设备端新增轻量 `c1max-power-guard`，由 launcher 启动。它通过 vendor `PowerManager` 的 `/dev/socket/PowerLock` 建立 per-client `suslock`：有入站 SSH 会话、Terminal 启动了 `dbclient/ssh/scp`，或者设备接入外部电源且 Dropbear 正在监听时持有锁；SSH 断开且设备改用电池后立即释放。这样插电时可以从远端随时建立 SSH，电池模式仍允许系统深度休眠，电源键可以正常唤醒。
 
 屏幕熄灭计时仍由设置页控制，默认不强制“永不熄屏”。建议 Coding 场景选择 5–10 分钟：屏幕可以省电，活动 SSH 由 suspend lock 保持网络和会话；没有活动连接时设备按系统策略休眠。
 
@@ -45,7 +45,7 @@ agent
 - [x] 在常驻 Linux 主机安装 Herdr，并由 systemd 用户服务管理；启用 linger，重启后自动恢复。
 - [x] C1Max 增加 `agent` SSH attach 命令和默认目标配置。
 - [x] C1Max Dropbear 增加可恢复的默认密码路径。
-- [x] C1Max 增加按活动 SSH 会话持有的 PowerManager suspend lock。
+- [x] C1Max 增加按 SSH 活动和供电状态管理的 PowerManager suspend lock。
 - [ ] 设备唤醒后重新部署镜像，验证 `sshd start/status`、`agent`、detach/reattach 和休眠/唤醒。
 - [ ] 在真机上记录 SSH 会话期间的内存、电池和 Wi-Fi 恢复时间，决定是否把 5 分钟写成新设备的推荐默认值。
 

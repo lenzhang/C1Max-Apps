@@ -14,9 +14,12 @@
 #include <unistd.h>
 
 /*
- * Keep the vendor PowerManager awake only while a real Dropbear session is
- * attached. PowerLock associates a suspend lock with the socket client, so a
- * dead guard cannot leave a permanent global lock behind.
+ * Keep the vendor PowerManager awake for an active SSH workflow. When the
+ * device has external power, also keep an idle Dropbear listener reachable so
+ * a remote Terminal can connect after the screen has gone dark. On battery,
+ * release the lock while idle so the stock suspend policy can save power.
+ * PowerLock associates a suspend lock with this socket client, so a dead guard
+ * cannot leave a permanent global lock behind.
  */
 static volatile sig_atomic_t quitting;
 static void stop_guard(int signal_number) { (void)signal_number; quitting = 1; }
@@ -41,8 +44,13 @@ static int process_info(pid_t pid, pid_t *parent, char *state, char *comm, size_
     return 0;
 }
 
-static int active_session(void) {
-    const int listener = read_number("/storage/apps/data/terminal/dropbear/dropbear.pid");
+static int listener_alive(pid_t listener) {
+    pid_t parent = -1; char state = 0, name[256] = {0};
+    if (listener <= 1 || process_info(listener, &parent, &state, name, sizeof(name)) != 0) return 0;
+    return state != 'Z' && !strcmp(name, "dropbear");
+}
+
+static int active_session(pid_t listener) {
     DIR *directory = opendir("/proc");
     if (!directory) return 0;
     int active = 0;
@@ -62,6 +70,11 @@ static int active_session(void) {
     }
     closedir(directory);
     return active;
+}
+
+static int externally_powered(void) {
+    return read_number("/sys/class/power_supply/usb/online") > 0 ||
+           read_number("/sys/class/power_supply/ac/online") > 0;
 }
 
 static int powerlock_connect(void) {
@@ -101,7 +114,9 @@ int main(void) {
 
     int lock_fd = -1;
     while (!quitting) {
-        const int busy = active_session();
+        const pid_t listener = read_number("/storage/apps/data/terminal/dropbear/dropbear.pid");
+        const int busy = active_session(listener) ||
+                         (listener_alive(listener) && externally_powered());
         if (busy && lock_fd < 0) {
             lock_fd = powerlock_connect();
             if (lock_fd >= 0 && powerlock_command(lock_fd, "suslock") != 0) {

@@ -180,16 +180,6 @@ export C1L_CONFIG="${C1L_CONFIG:-$C1_APPS_ROOT/launcher/apps.txt}"
 [ -x "$C1_APPS_ROOT/launcher/c1max-launcher" ] || { log 'Launcher executable is missing'; exit 1; }
 [ -x "$C1_APPS_ROOT/shared/c1max-volume" ] || { log 'Volume helper executable is missing'; exit 1; }
 
-# Keep the suspend guard tied to this supervisor. This covers both the normal
-# init-triggered desktop and manual/SSH recovery starts; the guard's parent
-# death signal releases any PowerManager lock when the launcher exits.
-POWER_GUARD="$C1_APPS_ROOT/shared/c1max-power-guard"
-if [ -x "$POWER_GUARD" ]; then
-    "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 &
-    POWER_GUARD_PID=$!
-    POWER_GUARD_STAMP=$(process_stamp "$POWER_GUARD_PID" 2>/dev/null || true)
-fi
-
 if [ ! -f "$AUDIO" ]; then
     if alsactl -f "$AUDIO.tmp" store 0 >/dev/null 2>&1; then
         mv "$AUDIO.tmp" "$AUDIO"
@@ -216,6 +206,17 @@ if [ "$(getprop init.svc.smartUI)" != stopped ] || pidof mp_s300 >/dev/null 2>&1
     log 'Stock UI did not fully stop; refusing overlapping frontends'; exit 1
 fi
 log 'Stock UI exited; starting custom apps (media/network/ADB services retained)'
+
+# Start this only after the stock UI handoff. Its init trigger restarts
+# PowerManager while smartUI is stopping; connecting earlier would leave the
+# per-client PowerLock attached to the old PowerManager instance.
+# The guard remains tied to this supervisor for both boot and manual starts.
+POWER_GUARD="$C1_APPS_ROOT/shared/c1max-power-guard"
+if [ -x "$POWER_GUARD" ]; then
+    "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 &
+    POWER_GUARD_PID=$!
+    POWER_GUARD_STAMP=$(process_stamp "$POWER_GUARD_PID" 2>/dev/null || true)
+fi
 
 # Neither child may retain the supervisor's flock descriptor.
 "$C1_APPS_ROOT/shared/c1max-volume" 9>&- &

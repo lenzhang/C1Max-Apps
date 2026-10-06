@@ -32,6 +32,38 @@ same_process() {
 }
 read_saved() { if [ -f "$1" ]; then cat "$1"; fi; }
 
+# Apply the user's saved screen-off preference on every foreground takeover.
+# desktop-service.sh applies the same preference during boot, but run.sh is
+# also used for manual/recovery starts after the one-shot boot service has
+# already consumed its boot marker. Keep this after the stock UI handoff so
+# a restarted vendor UI cannot overwrite the value we just selected.
+apply_screenoff_preference() {
+    screenoff=/storage/apps/data/settings/screenoff
+    [ -f "$screenoff" ] || return 0
+    saved_lock='' saved_timer='' valid=1
+    while IFS='=' read -r k v || [ -n "$k" ]; do
+        case "$k:$v" in
+            lock:0|lock:1) [ -z "$saved_lock" ] || valid=0; saved_lock=$v ;;
+            timer:0|timer:30000|timer:60000|timer:120000|timer:300000|timer:600000|timer:1200000|timer:1800000)
+                [ -z "$saved_timer" ] || valid=0; saved_timer=$v ;;
+            *) valid=0 ;;
+        esac
+    done < "$screenoff"
+    [ -n "$saved_lock" ] && [ -n "$saved_timer" ] || valid=0
+    [ "$saved_lock:$saved_timer" != 0:0 ] || valid=0
+    if [ "$valid" = 1 ]; then
+        applied=1
+        if [ "$saved_timer" != 0 ]; then
+            setprop sys.backlight.timer "$saved_timer" || applied=0
+        fi
+        setprop sys.backlight.lock "$saved_lock" || applied=0
+        setprop sys.backlight.timer.reset 1 || applied=0
+        log "Screen-off preference reapplied=$applied"
+    else
+        log 'Invalid screen-off preference; retaining current policy'
+    fi
+}
+
 # flock serializes stale-lock recovery too. Keep its inode: unlinking this
 # file would let another supervisor lock a different inode at the same path.
 exec 9>"$STATE/foreground.lock"
@@ -206,6 +238,7 @@ if [ "$(getprop init.svc.smartUI)" != stopped ] || pidof mp_s300 >/dev/null 2>&1
     log 'Stock UI did not fully stop; refusing overlapping frontends'; exit 1
 fi
 log 'Stock UI exited; starting custom apps (media/network/ADB services retained)'
+apply_screenoff_preference
 
 # Start this only after the stock UI handoff. Its init trigger restarts
 # PowerManager while smartUI is stopping; connecting earlier would leave the

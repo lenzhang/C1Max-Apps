@@ -5,7 +5,7 @@
     {
       "id": "launcher",
       "version": "0.2.0",
-      "revision": "303335f2bd8bb7010a4d80f345eee9162e8665b3b85ff659badc96d78cfc3de8"
+      "revision": "add235115cace104148a746b6651bffb6d212f6705c3ffac3feb11bea3ead133"
     },
     {
       "id": "piano",
@@ -40,7 +40,7 @@
     {
       "id": "terminal",
       "version": "0.1.0",
-      "revision": "22355d31c8814fe98f31738f274ebea9d406e0388b4db01b4954f503f80d15ff"
+      "revision": "addcd122adf26e2732e13a1e0ba21ea479819cb17bb16eb2929bebf848df32dc"
     },
     {
       "id": "gomoku",

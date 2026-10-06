@@ -26,7 +26,9 @@ agent configure user@server project-name
 agent
 ```
 
-目标主机需要先安装 Herdr 并让 `herdr server` 由 systemd 或其他正式服务管理。第一次进入时，Herdr 会创建或接入指定名称的持久会话。按 `Ctrl-B` 后按 `Q` 分离，服务端 Agent 继续运行；重新执行 `agent` 即可接回。直接输入 `exit` 会关闭当前 SSH 客户端，不会杀掉已经由 Herdr 服务端持有的 PTY。
+目标主机需要先安装 Herdr 并让 `herdr server` 由 systemd 或其他正式服务管理。第一次进入时，Herdr 会创建或接入指定名称的持久会话。按 `Ctrl-B` 后按 `Q` 分离，服务端 Agent 继续运行；重新执行 `agent` 即可接回。直接在远程窗格输入 `exit` 会结束那个窗格的 shell，暂离请使用 Ctrl-B、Q。
+
+当前家庭开发 VM 已安装 C1Max 这台 Mac 使用的 `ccai` 启动脚本（脚本本体不含密钥），并由 Herdr 的默认会话承载。进入设备 Terminal 后直接运行 `ccai glm`、`ccai sg`、`ccai grok` 或 `ccai kimi`；`ccai check` 可做端点预检。脚本需要的后端密钥仍保留在服务器用户目录，不复制到设备或公开仓库。服务器上另有 `ccai-herdr` 辅助命令：不在 Herdr 窗格时先连接默认会话，在窗格内则直接启动 ccai。
 
 如果不使用 Herdr，仍可直接使用 `ssh -t user@server`；`agent` 只是把常用的持久 Coding 工作流固定下来。
 
@@ -48,6 +50,7 @@ agent
 - [x] C1Max 增加按 SSH 活动和供电状态管理的 PowerManager suspend lock。
 - [x] 设备唤醒后重新部署镜像，验证 `sshd status`、`agent configure`，并确认 PowerManager 重启后守护锁仍然有效。
 - [x] 真机空闲验证：外部供电时连续 5 分钟无 SSH 会话，USB/ADB、Ping、2222 端口均保持可达；PowerLock ACK 持续有效，`c1max-power-guard` RSS 约 608 KB。
+- [x] 手动/恢复启动路径重新应用已保存的熄屏偏好；设备当前 `timer=30000` 已实际生效，且设备专用 SSH 公钥已安装到开发 VM。
 - [ ] 继续测量长时间 SSH 会话下的电池消耗和 Wi-Fi 恢复时间，再决定是否把 5 分钟写成新设备的推荐默认值。
 
 项目不把任何私有主机地址、模型密钥、SSH 私钥或服务密码编译进设备包；服务器目标由用户在设备上通过 `agent configure` 自行设置。

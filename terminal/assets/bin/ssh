@@ -1,6 +1,17 @@
 #!/bin/sh
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if [ -x "$script_dir/../../../linux-tools/bin/dbclient" ]; then
-    exec "$script_dir/../../../linux-tools/bin/dbclient" "$@"
+    dbclient="$script_dir/../../../linux-tools/bin/dbclient"
+else
+    dbclient=dbclient
 fi
-exec dbclient "$@"
+# A C1Max terminal keeps its outbound identity in the writable terminal
+# data directory. Dropbear does not use OpenSSH's id_ed25519 default name,
+# so select it explicitly before falling back to its normal lookup.
+for key in "$HOME/.ssh/id_dropbear" "$HOME/.ssh/id_ed25519" \
+           "$HOME/.ssh/id_ecdsa" "$HOME/.ssh/id_rsa"; do
+    if [ -f "$key" ]; then
+        exec "$dbclient" -i "$key" "$@"
+    fi
+done
+exec "$dbclient" "$@"

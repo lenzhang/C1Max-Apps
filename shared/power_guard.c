@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include "power_lock.h"
 
 /*
  * Keep the vendor PowerManager awake for an active SSH workflow. When the
@@ -88,31 +89,17 @@ static int powerlock_connect(void) {
     return fd;
 }
 
-static int powerlock_command(int fd, const char *command) {
-    char line[32];
-    /* PowerManager's FrameworkListener expects the registration verb first;
-     * the second token is the actual lock command. */
-    int length = snprintf(line, sizeof(line), "Register %s\n", command);
-    if (length <= 0 || length >= (int)sizeof(line)) return -1;
-    const char *cursor = line;
-    while (length > 0) {
-        ssize_t written = write(fd, cursor, (size_t)length);
-        if (written < 0 && errno == EINTR) continue;
-        if (written <= 0) return -1;
-        cursor += written; length -= (int)written;
-    }
-    return 0;
-}
-
 int main(void) {
     struct sigaction action;
     memset(&action, 0, sizeof(action)); action.sa_handler = stop_guard;
     sigemptyset(&action.sa_mask);
     sigaction(SIGTERM, &action, NULL); sigaction(SIGINT, &action, NULL); sigaction(SIGHUP, &action, NULL);
+    signal(SIGPIPE, SIG_IGN);
     pid_t parent = getppid();
     if (parent <= 1 || prctl(PR_SET_PDEATHSIG, SIGTERM) || getppid() != parent) return 1;
 
     int lock_fd = -1;
+    int heartbeat = 0, warned = 0;
     while (!quitting) {
         const pid_t listener = read_number("/storage/apps/data/terminal/dropbear/dropbear.pid");
         const int busy = active_session(listener) ||
@@ -120,18 +107,23 @@ int main(void) {
         if (busy && lock_fd < 0) {
             lock_fd = powerlock_connect();
             if (lock_fd >= 0 && powerlock_command(lock_fd, "suslock") != 0) {
+                if (!warned) fprintf(stderr, "[power-guard] suspend lock not acknowledged: %s; retrying\n", strerror(errno));
+                warned = 1;
                 close(lock_fd); lock_fd = -1;
             }
-            if (lock_fd >= 0) fprintf(stderr, "[power-guard] suspend lock acquired\n");
+            if (lock_fd >= 0) {
+                fprintf(stderr, "[power-guard] suspend lock acknowledged (pid %ld)\n", (long)getpid());
+                warned = 0; heartbeat = 0;
+            }
         } else if (!busy && lock_fd >= 0) {
             powerlock_command(lock_fd, "susunlock");
             close(lock_fd); lock_fd = -1;
             fprintf(stderr, "[power-guard] suspend lock released\n");
-        } else if (lock_fd >= 0) {
-            struct pollfd descriptor = {.fd = lock_fd, .events = POLLIN | POLLERR | POLLHUP};
-            if (poll(&descriptor, 1, 0) > 0 && (descriptor.revents & (POLLERR | POLLHUP))) {
+        } else if (lock_fd >= 0 && ++heartbeat >= 5) {
+            heartbeat = 0;
+            if (powerlock_command(lock_fd, "suslock") != 0) {
                 close(lock_fd); lock_fd = -1;
-                fprintf(stderr, "[power-guard] PowerLock socket closed; retrying\n");
+                fprintf(stderr, "[power-guard] PowerLock acknowledgement lost; reconnecting\n");
             }
         }
         usleep(1000000);

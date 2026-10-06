@@ -213,7 +213,7 @@ log 'Stock UI exited; starting custom apps (media/network/ADB services retained)
 # The guard remains tied to this supervisor for both boot and manual starts.
 POWER_GUARD="$C1_APPS_ROOT/shared/c1max-power-guard"
 if [ -x "$POWER_GUARD" ]; then
-    "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 &
+    "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 9>&- &
     POWER_GUARD_PID=$!
     POWER_GUARD_STAMP=$(process_stamp "$POWER_GUARD_PID" 2>/dev/null || true)
 fi

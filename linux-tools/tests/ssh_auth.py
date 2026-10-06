@@ -43,7 +43,14 @@ with tempfile.TemporaryDirectory(prefix='c1max-ssh-', dir='/root') as tmp:
         assert (result.returncode == 0) == ok, result.stderr + result.stdout
         return result.stdout + result.stderr
 
-    assert 'set a password' in control('start', ok=False)
+    # A fresh installation must be recoverable even before Settings has been
+    # opened. The MIPS Dropbear binary cannot execute directly in this x86
+    # test container, so start reaches the keygen boundary and leaves the
+    # generated default hash for the later real-server checks.
+    assert 'host-key generation failed' in control('start', ok=False)
+    assert hashfile.stat().st_mode & 0o777 == 0o600
+    default_hash = hashfile.read_bytes()
+    assert b'c1max' not in default_hash
     control('password', stdin=password + '\n' + password + '\n')
     assert hashfile.stat().st_mode & 0o777 == 0o600
     good_hash = hashfile.read_bytes()

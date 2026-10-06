@@ -157,6 +157,7 @@ set_target_properties(c1max-terminal PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAK
 
 add_executable(c1max-volume shared/volume.c)
 target_link_libraries(c1max-volume tinyalsa)
+add_executable(c1max-power-guard shared/power_guard.c)
 add_executable(c1max-key-test tests/key_inject.c)
 add_executable(c1max-gomoku gomoku/src/main.cpp gomoku/src/game.cpp shared/display.cpp shared/keyboard.cpp)
 target_link_libraries(c1max-gomoku c1net lvgl m)

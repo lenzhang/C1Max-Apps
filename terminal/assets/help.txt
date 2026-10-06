@@ -4,10 +4,12 @@ C1Max Terminal 常用命令
   help                    显示本列表；help cd 可查看 Bash 内建命令帮助
   exit                    退出 Shell，并返回 launcher；Ctrl-D 也可以退出
   ssh HOST                连接远端 SSH（实际使用 Dropbear dbclient）
+  agent TARGET [SESSION]  连接服务端 Herdr 持久 Coding Agent；Ctrl-B Q 分离
+  agent configure TARGET  保存默认 Agent 目标（可选 SESSION 参数）
   scp FILE HOST:PATH      在设备与远端之间复制文件
   sshd start|stop|restart|status  管理本机 Dropbear SSH 服务（默认端口 2222）
   sshd enable|disable       设置/取消开机自动启动
-  sshd password             设置 SSH 登录密码（无统一默认密码）
+  sshd password             设置 SSH 登录密码（首次未配置时默认是 c1max，建议修改）
   sshd port N               设置端口（1024–65535）
   curl URL                HTTP/HTTPS 请求、下载和 API 调试
   语音输入                设置中配置后，点击右下角“语音”开始，再点“结束”完成

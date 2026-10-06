@@ -1282,7 +1282,7 @@ std::vector<Item> ssh_page() {
     v.push_back(action("autostart", "开机自动启动", auto_start ? "已开启" : "未开启", [auto_start] {
                            set_sshd_auto_start(!auto_start);
                        }));
-    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。先设置密码或导入公钥后再启动；没有统一默认密码，只保存密码哈希。"));
+    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。首次启动若未设置密码会使用默认密码 c1max；建议进入此页后立即修改，密码只保存哈希。"));
     return v;
 }
 

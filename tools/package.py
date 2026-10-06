@@ -127,6 +127,7 @@ shutil.copy2(root/'.build/ca-certificates.crt',out/'shared')
 shutil.copy2(root/'.build/mips/c1max-activate',out/'shared')
 shutil.copy2(root/'.build/mips/c1max-capture',out/'shared')
 shutil.copy2(root/'.build/mips/c1max-volume',out/'shared')
+shutil.copy2(root/'.build/mips/c1max-power-guard',out/'shared')
 shutil.copy2(root/'.build/mips/c1max-hotkey',out/'shared')
 font=root/'shared/fonts/NotoSansSC-Regular.ttf'
 if font.exists():shutil.copy2(font,out/'shared')

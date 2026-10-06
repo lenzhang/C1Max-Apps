@@ -19,8 +19,9 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 - 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
   `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
   本机 Dropbear 服务端（默认端口 2222、公钥或密码认证），公钥放在
-  `/storage/terminal/dropbear/authorized_keys`；没有统一默认密码，
-  启动前须在设置页或用 `sshd password` 设置密码，或用 `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
+  `/storage/terminal/dropbear/authorized_keys`；首次没有凭据时会自动创建默认密码
+  `c1max`，建议登录后用 `sshd password` 或设置页立即修改，也可以用
+  `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
   `scp` 和其他应用工具；设备的 `vi` 可通过 `vim` 名称调用。
 - 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
   具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：
@@ -28,6 +29,11 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
   不需要寻找或按屏幕上的 Ctrl 键。底部状态栏会显示 `拼` 或 `abc`。中文模式下输入拼音，空格选首个
   候选，数字 `1`–`9` 选候选，右上退格删除拼音，回车提交当前候选。候选和拼音显示在
   底部状态栏；有候选时“符号两次 + Z / X”翻上一页／下一页候选。这是终端内置输入，不会改变 launcher 或其他应用的系统输入法。
+
+- 远程 Coding Agent：服务端可运行 Herdr 这类会话管理器，设备端执行
+  `agent user@server`（或先执行 `agent configure user@server` 保存默认目标）即可
+  通过 SSH attach 到持久工作区；在 Herdr 中按 `Ctrl-B`、`Q` 分离，远端 Agent
+  继续运行，重新执行同一命令即可接回。设备不运行 Herdr 或 Node.js，降低内存和功耗。
 
 - 可选语音输入：先在系统设置的「语音输入」中启用；服务来源可以复用 MoonPilot 的 ASR／对话设置，
   或填写独立聚合服务地址、模型和可选 API 密钥，

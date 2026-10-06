@@ -59,4 +59,20 @@ int main(int argc, char **argv) {
     run_case(b"ok", 1)  # A partial frame is not an acknowledgement.
     run_case(b"", 1)  # A server that ignores the command must time out.
     run_case(None, 1)
+    # A blocked write must honor the same deadline as a missing reply.
+    peer, child = socket.socketpair()
+    child.setblocking(False)
+    try:
+        while True: child.send(b'x' * 8192)
+    except BlockingIOError:
+        pass
+    child.setblocking(True)
+    process = subprocess.Popen([str(binary), str(child.fileno()), "suslock"], pass_fds=(child.fileno(),))
+    child.close()
+    try:
+        assert process.wait(timeout=3) == 1
+    finally:
+        peer.close()
+        if process.poll() is None: process.kill()
+        process.wait()
 print("PASS PowerLock: NUL frames, unique PID, lock/unlock ACK, fragmented reply, rejection, timeout and disconnect")

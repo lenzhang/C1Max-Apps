@@ -34,6 +34,9 @@ for name in ids:
             if p.suffix in ['.nes','.7z','.o']:continue
             if p.suffix == '.png' and 'assets' not in p.parts:continue
             digest.update(str(p.relative_to(root)).encode()+b'\0'+p.read_bytes())
+    if name=='settings':
+        for filename in ['terminal/src/voice.cpp','terminal/src/voice.hpp']:
+            digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())
     if name=='tox':
         for filename in ['camera/src/frame.hpp','camera/src/album.cpp','camera/src/album.hpp','camera/src/stb_image_write.h','moonpilot/src/process.hpp']:
             digest.update(filename.encode()+b'\0'+(root/filename).read_bytes())

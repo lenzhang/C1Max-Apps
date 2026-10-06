@@ -102,8 +102,9 @@ int main(void) {
     int heartbeat = 0, warned = 0;
     while (!quitting) {
         const pid_t listener = read_number("/storage/apps/data/terminal/dropbear/dropbear.pid");
-        const int busy = active_session(listener) ||
-                         (listener_alive(listener) && externally_powered());
+        const int listening = listener_alive(listener);
+        const int busy = active_session(listening ? listener : -1) ||
+                         (listening && externally_powered());
         if (busy && lock_fd < 0) {
             lock_fd = powerlock_connect();
             if (lock_fd >= 0 && powerlock_command(lock_fd, "suslock") != 0) {

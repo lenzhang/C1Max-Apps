@@ -13,19 +13,18 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 - 设备没有独立数字行，数字在 `Q W E R T Y U I O P` 键帽上方；按住 Shift 再按首排
   字母即可输入 `1 2 3 4 5 6 7 8 9 0`。例如候选栏要选第 3 项，按 `Shift+E`。
 - 右上退格为终端 DEL 字节；确认发送回车。中间返回发送 Escape；在前缀模式中
-  返回只取消前缀。Terminal 内电源键发送 Escape，短按和长按都不会退出 Terminal。
+  返回只取消前缀。电源键返回 launcher。
 - 输入 `exit`（或按 Ctrl-D）结束交互式 Shell，终端随即回到 launcher。
 - 没有屏幕退出按钮或屏幕键盘；右下角提供明确标记的语音输入按钮。
 - 启动信息会列出高频命令；输入 `help` 可再次查看完整清单。`ssh` 是 Dropbear
   `dbclient` 的兼容入口，`scp` 用于远端文件复制；`sshd start|stop|status` 管理
   本机 Dropbear 服务端（默认端口 2222、公钥或密码认证），公钥放在
-  `/storage/terminal/dropbear/authorized_keys`；首次没有凭据时会自动创建默认密码
-  `c1max`，建议登录后用 `sshd password` 或设置页立即修改，也可以用
-  `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
+  `/storage/terminal/dropbear/authorized_keys`；没有统一默认密码，启动前需用
+  `sshd password` 或设置页配置密码，或用 `sshd authorize FILE` 导入公钥。SSH 登录后的 PATH 也包含
   `scp` 和其他应用工具；设备的 `vi` 可通过 `vim` 名称调用。
 - 终端内置 Rime 拼音输入。照片中 **M 右侧、回车左侧的相机图标键**就是“符号”键，
   具体实体键位见[设备键盘记录](../docs-keyboard.md)。切换中英文（仅终端内）按：
-  默认用双击 Shift 进入拼音；旧的 `相机图标键` → `A` → `空格`（`Ctrl-A Space`）仍然可用，
+  从小写状态连续完成两次“双击 Shift”进入拼音；旧的 `相机图标键` → `A` → `空格`（`Ctrl-A Space`）仍然可用，
   不需要寻找或按屏幕上的 Ctrl 键。底部状态栏会显示 `拼` 或 `abc`。中文模式下输入拼音，空格选首个
   候选，数字 `1`–`9` 选候选，右上退格删除拼音，回车提交当前候选。候选和拼音显示在
   底部状态栏；有候选时“符号两次 + Z / X”翻上一页／下一页候选。这是终端内置输入，不会改变 launcher 或其他应用的系统输入法。
@@ -52,8 +51,8 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 
 | 按法 | 下一个键 | 作用 |
 | --- | --- | --- |
-| 符号一次 | A–Z（除 V） | Ctrl-A…Ctrl-Z，含 Ctrl-C 中断、Ctrl-D EOF、Ctrl-L 清屏、Ctrl-Z 挂起 |
-| 符号一次 | V | 开始／结束语音录音 |
+| 符号一次 | A–Z（语音开启时除 V） | Ctrl-A…Ctrl-Z，含 Ctrl-C 中断、Ctrl-D EOF、Ctrl-L 清屏、Ctrl-Z 挂起 |
+| 符号一次 | V | 语音开启时开始／结束录音；关闭时仍为 Ctrl-V |
 | 符号一次 | 空格 | Tab 补全 |
 | 符号两次 | W / A / S / D | 上 / 左 / 下 / 右 |
 | 符号两次 | Q / E | Home / End |
@@ -66,7 +65,7 @@ FbTerm、X11、Wayland 或屏幕虚拟键盘。
 最常用的两个操作：
 
 - **Tab**：按一次相机图标键，再按空格。也可以在符号导航模式下按“相机图标键两次 + 空格”。
-- **Esc**：按右侧中间的弯箭头返回键或 Terminal 内的电源键；有符号前缀时，它只取消前缀。正在输入拼音时，它取消当前拼音/候选，不把 Esc 送给 Shell。
+- **Esc**：按右侧中间的弯箭头返回键；有符号前缀时，它只取消前缀。正在输入拼音时，它取消当前拼音/候选，不把 Esc 送给 Shell。
 
 例如 `ls | less` 的管道是“符号、符号、符号、R”。默认关闭 PTY 软件流控，
 Ctrl-S / Ctrl-Q 直接送给前台程序，避免误按“符号、S”后画面停住。
@@ -192,3 +191,5 @@ tar、gzip、unzip、sqlite3、ps、top、df、du、ping 和 nc 等高频命令�
 Shift + 音量＋／－可将正文字号在 12–28 px 之间调整，同时更新 PTY 行列数；不改变系统音量，不增加界面提示。
 
 输入法集成测试：构建 `c1ime-test`，用生成的词库在 QEMU 下验证真实拼音候选、中文提交、编辑与缺词库回退；离屏渲染测试使用输入法 stub，不替代此测试。
+
+`sh terminal/tests/review_ui.sh` 在 Linux 容器中以真实 LVGL 控件验证语音设置持久化、焦点切换、分类栏范围，以及终端语音浮层调字号和电源键返回；采用 ASan/UBSan，输入法为测试 stub。

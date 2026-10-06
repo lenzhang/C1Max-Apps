@@ -134,16 +134,6 @@ set_password() {
     mv "$password_hash.tmp" "$password_hash"
     printf 'sshd password updated\n'
 }
-ensure_default_password() {
-    [ -x "$cryptpw" ] || fail 'cryptpw is missing; cannot create the default SSH password'
-    [ ! -L "$password_hash" ] || fail 'password hash must not be a symlink'
-    # Keep a fresh device recoverable when the UI is unavailable. A user-set
-    # password remains authoritative and is stored only as a SHA-crypt hash.
-    printf '%s' 'c1max' | "$cryptpw" -P 0 -m sha512 > "$password_hash.tmp" || fail 'default password hashing failed'
-    chmod 600 "$password_hash.tmp"
-    valid_password_hash "$password_hash.tmp" || fail 'generated default password hash is invalid'
-    mv "$password_hash.tmp" "$password_hash"
-}
 prepare() {
     private_dir "$data"
     # /storage/apps is world-writable on stock devices. Auth keys must live
@@ -164,10 +154,9 @@ start_server() {
     fi
     [ -x "$server" ] && [ -x "$keygen" ] || fail 'Dropbear tools are missing from this release'
     prepare
-    # A fresh device must remain recoverable over SSH even before Settings has
-    # been opened. If a key exists, keep key-only authentication.
+    # No shared default password. Require an explicitly configured credential.
     if ! valid_password_hash && [ "$(key_count)" = 0 ]; then
-        ensure_default_password
+        fail 'set a password with sshd password or import a public key before starting'
     fi
     [ ! -L "$key" ] || fail 'host key must not be a symlink'
     if [ ! -s "$key" ]; then

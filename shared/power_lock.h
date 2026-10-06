@@ -23,13 +23,22 @@ static int powerlock_command(int fd, const char *command) {
     int length = snprintf(frame, sizeof(frame), "Register %s %ld", command, (long)getpid());
     if (length < 0 || length >= (int)sizeof(frame)) { errno = EINVAL; return -1; }
     const long long deadline = powerlock_milliseconds() + 1000;
-    int flags = 0;
+    int flags = MSG_DONTWAIT;
 #ifdef MSG_NOSIGNAL
-    flags = MSG_NOSIGNAL;
+    flags |= MSG_NOSIGNAL;
 #endif
-    ssize_t sent;
-    do { sent = send(fd, frame, (size_t)length + 1, flags); } while (sent < 0 && errno == EINTR);
-    if (sent != length + 1) return -1;
+    for (size_t offset = 0; offset < (size_t)length + 1;) {
+        long long remaining = deadline - powerlock_milliseconds();
+        if (remaining <= 0) { errno = ETIMEDOUT; return -1; }
+        struct pollfd descriptor = {.fd = fd, .events = POLLOUT};
+        int ready = poll(&descriptor, 1, (int)remaining);
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready <= 0) { if (!ready) errno = ETIMEDOUT; return -1; }
+        ssize_t sent = send(fd, frame + offset, (size_t)length + 1 - offset, flags);
+        if (sent < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+        if (sent <= 0) return -1;
+        offset += (size_t)sent;
+    }
     for (size_t used = 0; used < sizeof(reply); ) {
         long long remaining = deadline - powerlock_milliseconds();
         if (remaining <= 0) { errno = ETIMEDOUT; return -1; }
@@ -37,8 +46,8 @@ static int powerlock_command(int fd, const char *command) {
         int ready = poll(&descriptor, 1, (int)remaining);
         if (ready < 0 && errno == EINTR) continue;
         if (ready <= 0) { if (!ready) errno = ETIMEDOUT; return -1; }
-        ssize_t count = recv(fd, reply + used, 1, 0);
-        if (count < 0 && errno == EINTR) continue;
+        ssize_t count = recv(fd, reply + used, 1, MSG_DONTWAIT);
+        if (count < 0 && (errno == EINTR || errno == EAGAIN)) continue;
         if (count <= 0) { if (!count) errno = ECONNRESET; return -1; }
         if (reply[used++] == '\0') {
             if (!strcmp(reply, "ok")) return 0;

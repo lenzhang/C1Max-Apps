@@ -13,8 +13,10 @@
 sudo useradd --system --home-dir /opt/c1max-terminal-voice --shell /usr/sbin/nologin c1voice  # 只需一次
 sudo install -d -o c1voice -g c1voice /opt/c1max-terminal-voice
 sudo install -m 755 terminal_voice_gateway.py /opt/c1max-terminal-voice/terminal_voice_gateway.py
-sudo install -m 644 terminal-voice-gateway.env.example /etc/c1max-terminal-voice.env
+sudo install -m 600 terminal-voice-gateway.env.example /etc/c1max-terminal-voice.env
 sudo install -m 644 terminal-voice-gateway.service /etc/systemd/system/c1max-terminal-voice.service
+# 启动前编辑 /etc/c1max-terminal-voice.env，填写本机实际服务地址与模型名。
+# LLM_API_KEY_FILE 指定的文件需对 c1voice 可读，建议所有者 c1voice、权限 600。
 sudo systemctl daemon-reload
 sudo systemctl enable --now c1max-terminal-voice
 curl http://127.0.0.1:9896/health

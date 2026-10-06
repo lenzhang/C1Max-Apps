@@ -20,6 +20,7 @@ struct VoiceConfig {
 };
 
 bool load_voice_config(const std::string &path, VoiceConfig &config, std::string &error);
+bool save_voice_config(const std::string &path, const VoiceConfig &config, std::string &error);
 bool load_moonpilot_config(const std::string &path, VoiceConfig &config, std::string &error);
 std::string read_voice_snapshot(const std::string &path);
 

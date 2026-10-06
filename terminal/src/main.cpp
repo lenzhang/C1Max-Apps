@@ -51,7 +51,8 @@ bool pending_ctrl_a = false;
 uint32_t pending_ctrl_a_at = 0;
 terminal::VoiceConfig voice_config;
 terminal::VoiceRecorder voice_recorder;
-std::future<std::string> voice_job;
+struct VoiceResult { std::string text, warning; };
+std::future<VoiceResult> voice_job;
 std::future<std::string> voice_preview_job;
 bool voice_recording = false;
 bool voice_finishing = false;
@@ -127,12 +128,12 @@ void draw(lv_event_t *event) {
 }
 void set_status(const std::string &shell_state = {}) {
     std::string text;
-    if (!persistent_error.empty()) text = persistent_error + "  |  Power: Esc";
+    if (!persistent_error.empty()) text = persistent_error + "  |  Power: home";
     else if (voice_recording) text = "VOICE 录音 " + std::to_string((screen::tick() - voice_started_at) / 1000) +
         "s · 点击结束" + (voice_preview_failed ? " · 实时预览暂不可用" : "");
     else if (voice_finishing) text = "VOICE 正在准备录音…";
     else if (voice_busy) text = "VOICE 正在识别和润色…";
-    else if (!shell_state.empty()) text = shell_state + "  |  Power: Esc";
+    else if (!shell_state.empty()) text = shell_state + "  |  Power: home";
     else {
         if (ime && ime->ready() && ime->mode() == c1ime::Mode::Chinese) {
             text = "拼 ";
@@ -154,7 +155,7 @@ void set_status(const std::string &shell_state = {}) {
     }
     if (text != last_status) { lv_label_set_text(status, text.c_str()); last_status = std::move(text); }
     if (voice_button) {
-        const bool active = voice_recording || voice_finishing || voice_busy;
+        const bool active = voice_recording || voice_finishing || voice_busy || voice_final_pending || voice_preview_busy;
         const int state = voice_recording ? 1 : active ? 2 : 0;
         if (state != last_voice_button_state) {
             last_voice_button_state = state;
@@ -229,7 +230,9 @@ void start_final_voice_request() {
     voice_cancelled = false;
     persistent_error.clear();
     voice_job = std::async(std::launch::async, [config, wav = std::move(wav), context, context_rows, context_cols] {
-        return terminal::request_voice(config, wav, context, context_rows, context_cols, &voice_cancelled);
+        VoiceResult result;
+        result.text = terminal::request_voice(config, wav, context, context_rows, context_cols, &voice_cancelled, false, &result.warning);
+        return result;
     });
 }
 
@@ -238,6 +241,7 @@ void finish_voice_recording() {
     voice_preview_cancelled = true;
     if (!voice_recorder.error().empty()) {
         voice_finishing = false;
+        unlink(voice_file.c_str());
         persistent_error = voice_recorder.error();
         return;
     }
@@ -255,7 +259,7 @@ void finish_voice_recording() {
 }
 
 void toggle_voice_recording() {
-    if (voice_busy || voice_finishing) return;
+    if (voice_busy || voice_finishing || (!voice_recording && voice_preview_busy)) return;
     if (voice_recording) {
         voice_finishing = true;
         voice_preview_cancelled = true;
@@ -429,24 +433,15 @@ bool ime_key(uint32_t code) {
 
 void key(uint32_t code) {
     if(code==screen::KEY_FONT_UP||code==screen::KEY_FONT_DOWN){resize_font(code==screen::KEY_FONT_UP?2:-2);return;}
-    // The shared input layer reports a short power press as KEY_HOME and a
-    // five-second hold as KEY_HOME_LONG. Terminal owns both actions: power
-    // is Escape here, and leaving the shell is done with `exit`/Ctrl-D.
-    if (code == screen::KEY_HOME_LONG) return;
+    if (code == screen::KEY_HOME || code == screen::KEY_HOME_LONG) { screen::quit = true; return; }
     if (code == screen::KEY_MODE) { cycle_text_mode(); return; }
-    if (input.mode() == terminal::Input::Mode::Control && (code == 'v' || code == 'V')) {
+    if (voice_config.enabled && input.mode() == terminal::Input::Mode::Control && (code == 'v' || code == 'V')) {
         input.escape(*model);
         toggle_voice_recording();
         return;
     }
     if (code == screen::KEY_SYMBOL) { input.symbol(); return; }
     if (pending_ctrl_a && code != ' ') { send_terminal_text("\x01"); pending_ctrl_a = false; }
-    if (code == screen::KEY_HOME) {
-        // Reuse the ordinary Escape path so an active IME composition is
-        // cancelled before the key reaches the shell.
-        if (!ime_key(screen::KEY_EXIT)) input.escape(*model);
-        return;
-    }
     if (ime_key(code)) return;
     if (code == screen::KEY_EXIT || code == LV_KEY_ESC) { input.escape(*model); return; }
     switch (code) {
@@ -485,6 +480,7 @@ void resize_font(int delta){
     if(!next){if(next_bold)lv_tiny_ttf_destroy(next_bold);if(next_cjk)lv_tiny_ttf_destroy(next_cjk);return;}
     int cw=(size*3+4)/5,ch=size+6,new_rows=body_height/ch,new_cols=800/cw;
     if(!shell_pty->resize(new_rows,new_cols)){for(auto*f:{next,next_bold,next_cjk})if(f)lv_tiny_ttf_destroy(f);return;}
+    if(voice_preview_label)lv_obj_set_style_text_font(voice_preview_label,next,0);
     if(regular)regular->fallback=nullptr;if(bold)bold->fallback=nullptr;if(small)small->fallback=nullptr;
     for(auto*f:{regular,bold,cjk})if(f)lv_tiny_ttf_destroy(f);
     regular=next;bold=next_bold;cjk=next_cjk;regular->fallback=cjk;if(bold)bold->fallback=cjk;if(small)small->fallback=cjk;
@@ -604,7 +600,7 @@ int main() {
             argv.push_back("--noprofile"); argv.push_back("--rcfile"); argv.push_back(assets + "shellrc");
         }
         argv.push_back("-i");
-        term.feed("\x1b[36mC1Max Terminal\x1b[0m  |  Symbol + C: interrupt  |  Power: Esc\r\n");
+        term.feed("\x1b[36mC1Max Terminal\x1b[0m  |  Symbol + C: interrupt  |  Power: home\r\n");
         term.feed("Commands: help exit ssh scp sshd (configure authentication first) vi/vim nano less\r\n");
         term.feed("Tools: grep sed awk find tar gzip unzip wget curl sqlite3 ps top\r\n");
         term.feed("Voice: tap Voice button to start/stop; Symbol + V also works (Settings)\r\n");
@@ -632,10 +628,10 @@ int main() {
             if (voice_busy && voice_job.valid() &&
                 voice_job.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
                 try {
-                    const auto text = voice_job.get();
+                    const auto result = voice_job.get();
                     voice_busy = false;
-                    send_terminal_text(text);
-                    persistent_error.clear();
+                    if (pty.running()) send_terminal_text(result.text);
+                    persistent_error = result.warning;
                 } catch (const std::exception &e) {
                     voice_busy = false;
                     persistent_error = std::string("语音输入失败：") + e.what();
@@ -661,18 +657,19 @@ int main() {
             lv_timer_handler();
             usleep(10000);
         }
-        voice_cancelled = true;
-        voice_preview_cancelled = true;
-        c1::cancel_requests();
-        if (voice_job.valid()) voice_job.wait();
-        if (voice_preview_job.valid()) voice_preview_job.wait();
-        voice_recorder.stop();
-        if (!voice_file.empty()) unlink(voice_file.c_str());
         pty.stop();shell_pty=nullptr;ime.reset();
         lv_obj_clean(screen_root); model = nullptr;
     } catch (const std::exception &error) {
         std::fprintf(stderr, "terminal: %s\n", error.what()); result = 1;
         lv_obj_clean(lv_screen_active()); model = nullptr;
     }
+        voice_cancelled = true;
+        voice_preview_cancelled = true;
+        c1::cancel_requests();
+        voice_recorder.stop();
+        if (voice_job.valid()) voice_job.wait();
+        if (voice_preview_job.valid()) voice_preview_job.wait();
+        if (!voice_file.empty()) unlink(voice_file.c_str());
+    shell_pty=nullptr; ime.reset();
     release_fonts(); screen::close(); return result;
 }

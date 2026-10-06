@@ -24,20 +24,26 @@ EOF
 }
 valid_target() {
     case "$1" in
-        ''|*[!A-Za-z0-9@._:%+-]*) return 1 ;;
+        ''|-*|@*|*@|*@*@*|*[!A-Za-z0-9@._:%+-]*) return 1 ;;
     esac
+    case "$1" in *@*) ;; *) return 1 ;; esac
+    [ "${#1}" -le 320 ]
 }
 valid_session() {
     case "$1" in
-        ''|*[!A-Za-z0-9._-]*) return 1 ;;
+        ''|-*|*[!A-Za-z0-9._-]*) return 1 ;;
     esac
+    [ "${#1}" -le 128 ]
 }
 save_config() {
     mkdir -p "$data"
     chmod 700 "$data"
-    printf 'target=%s\nsession=%s\n' "$1" "$2" > "$config.tmp"
-    chmod 600 "$config.tmp"
-    mv "$config.tmp" "$config"
+    temporary=$(mktemp "$config.XXXXXX") || fail 'cannot create configuration'
+    trap 'rm -f "$temporary"' EXIT HUP INT TERM
+    printf 'target=%s\nsession=%s\n' "$1" "$2" > "$temporary"
+    chmod 600 "$temporary"
+    mv "$temporary" "$config"
+    trap - EXIT HUP INT TERM
     echo "agent target saved: $1 (session $2)"
 }
 read_value() {

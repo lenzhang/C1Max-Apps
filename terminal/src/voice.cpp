@@ -33,6 +33,7 @@ std::string base64(const std::string &input) {
 
 void validate_config(const VoiceConfig &config) {
     if (config.endpoint.empty() || config.model.empty()) throw std::runtime_error("请先在设置中填写语音服务地址和模型");
+    if (config.endpoint.find('\0') != std::string::npos) throw std::runtime_error("语音服务地址格式不正确");
     c1::origin(config.endpoint);
     if (config.endpoint.size() > 512 || config.model.size() > 160 || config.token.size() > 512 ||
         config.model.find_first_of("\r\n") != std::string::npos || config.model.find('\0') != std::string::npos ||
@@ -74,6 +75,20 @@ bool load_voice_config(const std::string &path, VoiceConfig &config, std::string
     }
 }
 
+bool save_voice_config(const std::string &path, const VoiceConfig &config, std::string &error) {
+    error.clear();
+    try {
+        if (!config.use_moonpilot && (config.enabled || !config.endpoint.empty())) validate_config(config);
+        if (config.endpoint.size() > 512 || config.model.size() > 160 || config.token.size() > 512)
+            throw std::runtime_error("语音设置过长");
+        Json json = {{"enabled", config.enabled}, {"include_context", config.include_context},
+                     {"live_preview", config.live_preview}, {"use_moonpilot", config.use_moonpilot},
+                     {"endpoint", config.endpoint}, {"model", config.model}, {"token", config.token}};
+        c1::save_private(path, json.dump(2) + "\n");
+        return true;
+    } catch (const std::exception &e) { error = e.what(); return false; }
+}
+
 bool load_moonpilot_config(const std::string &path, VoiceConfig &config, std::string &error) {
     error.clear();
     try {
@@ -89,7 +104,7 @@ bool load_moonpilot_config(const std::string &path, VoiceConfig &config, std::st
         if (next.endpoint.empty() || next.model.empty()) throw std::runtime_error("MoonPilot 尚未配置 ASR 接口和模型");
         validate_config(next);
         if (!next.chat_endpoint.empty()) c1::origin(next.chat_endpoint);
-        if (next.chat_endpoint.size() > 512 || next.chat_model.size() > 160 || next.chat_token.size() > 512 ||
+        if (next.chat_endpoint.find('\0') != std::string::npos || next.chat_endpoint.size() > 512 || next.chat_model.size() > 160 || next.chat_token.size() > 512 ||
             next.chat_token.find_first_of("\r\n") != std::string::npos || next.chat_token.find('\0') != std::string::npos)
             throw std::runtime_error("MoonPilot 对话服务设置格式不正确");
         config = std::move(next);
@@ -111,6 +126,7 @@ bool VoiceRecorder::start(const std::string &path) {
     if (child_ == 0) {
         prctl(PR_SET_PDEATHSIG, SIGKILL);
         if (getppid() != parent) _exit(1);
+        umask(077);
         execl("/usr/bin/arecord", "arecord", "-q", "-D", "plughw:0,1",
               "-f", "S16_LE", "-r", "16000", "-c", "1", "-t", "wav",
               "-d", "20", path_.c_str(), static_cast<char *>(nullptr));
@@ -141,6 +157,12 @@ bool VoiceRecorder::poll() {
 void VoiceRecorder::stop() {
     if (!active()) return;
     kill(child_, SIGTERM);
+    for (int i = 0; i < 20; ++i) {
+        const auto done = waitpid(child_, nullptr, WNOHANG);
+        if (done == child_ || (done < 0 && errno != EINTR)) { child_ = -1; return; }
+        usleep(10000);
+    }
+    kill(child_, SIGKILL);
     while (waitpid(child_, nullptr, 0) < 0 && errno == EINTR) {}
     child_ = -1;
 }
@@ -301,6 +323,8 @@ std::string request_voice(const VoiceConfig &config, const std::string &wav,
     if (text.empty()) text = json.value("insert_text", std::string());
     if (preview && text.empty()) return {};
     validate_text(text);
+    if (warning && json.contains("warning") && json.at("warning").is_string() && !json.at("warning").get<std::string>().empty())
+        *warning = "润色未完成，已插入识别原文";
     return text;
 }
 

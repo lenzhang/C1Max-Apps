@@ -1,4 +1,5 @@
 #include "display.hpp"
+#include "../../terminal/src/voice.hpp"
 #include "src/libs/tiny_ttf/lv_tiny_ttf.h"
 #include <tinyalsa/mixer.h>
 #include <algorithm>
@@ -101,22 +102,14 @@ std::string apps_root_dir() {
     return p && *p ? p : "/storage/apps/current";
 }
 
-struct VoiceSettings {
-    bool enabled = false;
-    bool include_context = true;
-    bool live_preview = true;
-    bool use_moonpilot = true;
-    std::string endpoint;
-    std::string model;
-    std::string token;
-};
+using VoiceSettings = terminal::VoiceConfig;
 VoiceSettings voice;
 std::string voice_endpoint_draft, voice_model_draft, voice_token_draft;
 
 std::string voice_settings_file() { return apps_data_dir() + "/terminal/voice.json"; }
 
 bool valid_voice_endpoint(const std::string &url) {
-    if (url.empty() || url.size() > 512 || url.find_first_of("\r\n\t ") != std::string::npos) return false;
+    if (url.empty() || url.size() > 512 || url.find_first_of("\r\n\t ") != std::string::npos || url.find('\0') != std::string::npos) return false;
     const auto scheme = url.find("://");
     if (scheme != 4 && scheme != 5) return false;
     if (url.compare(0, scheme, "http") != 0 && url.compare(0, scheme, "https") != 0) return false;
@@ -125,90 +118,24 @@ bool valid_voice_endpoint(const std::string &url) {
     return !authority.empty() && authority.find_first_of("@?#") == std::string::npos;
 }
 
-std::string json_escape(const std::string &s) {
-    std::string out;
-    for (unsigned char c : s) {
-        if (c == '\\') out += "\\\\";
-        else if (c == '"') out += "\\\"";
-        else if (c == '\n') out += "\\n";
-        else if (c == '\r') out += "\\r";
-        else if (c == '\t') out += "\\t";
-        else if (c < 0x20) { out += "?"; }
-        else out.push_back(static_cast<char>(c));
-    }
-    return out;
-}
-
-std::string json_string_value(const std::string &text, const char *key) {
-    const std::string marker = std::string("\"") + key + "\"";
-    const auto at = text.find(marker);
-    if (at == std::string::npos) return {};
-    auto pos = text.find(':', at + marker.size());
-    if (pos == std::string::npos) return {};
-    pos = text.find('"', pos + 1);
-    if (pos == std::string::npos) return {};
-    std::string out;
-    for (++pos; pos < text.size(); ++pos) {
-        const char c = text[pos];
-        if (c == '"') return out;
-        if (c != '\\' || ++pos >= text.size()) { out.push_back(c); continue; }
-        switch (text[pos]) {
-        case 'n': out.push_back('\n'); break;
-        case 'r': out.push_back('\r'); break;
-        case 't': out.push_back('\t'); break;
-        case '\\': out.push_back('\\'); break;
-        case '"': out.push_back('"'); break;
-        default: out.push_back(text[pos]); break;
-        }
-    }
-    return {};
-}
-
-bool json_bool_value(const std::string &text, const char *key, bool fallback) {
-    const std::string marker = std::string("\"") + key + "\"";
-    const auto at = text.find(marker);
-    if (at == std::string::npos) return fallback;
-    const auto pos = text.find(':', at + marker.size());
-    if (pos == std::string::npos) return fallback;
-    auto value = text.substr(pos + 1);
-    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
-    if (value.rfind("true", 0) == 0) return true;
-    if (value.rfind("false", 0) == 0) return false;
-    return fallback;
-}
-
 void load_voice_settings() {
-    const auto path = voice_settings_file();
-    const auto text = read_file(path.c_str(), 8192);
-    if (text.empty()) return;
-    try {
-        voice.enabled = json_bool_value(text, "enabled", false);
-        voice.include_context = json_bool_value(text, "include_context", true);
-        voice.live_preview = json_bool_value(text, "live_preview", true);
-        voice.use_moonpilot = json_bool_value(text, "use_moonpilot", voice.endpoint.empty());
-        voice.endpoint = json_string_value(text, "endpoint");
-        voice.model = json_string_value(text, "model");
-        voice.token = json_string_value(text, "token");
-        if (!valid_voice_endpoint(voice.endpoint) || voice.model.size() > 160 || voice.token.size() > 512)
-            voice = VoiceSettings{};
-    } catch (...) {
+    voice = VoiceSettings{};
+    voice.use_moonpilot = true;
+    if (access(voice_settings_file().c_str(), F_OK) != 0) return;
+    std::string error;
+    if (!terminal::load_voice_config(voice_settings_file(), voice, error)) {
         voice = VoiceSettings{};
+        voice.use_moonpilot = true;
     }
 }
 
 bool save_voice_settings() {
-    if (!valid_voice_endpoint(voice.endpoint) && !voice.endpoint.empty()) return false;
-    if (voice.model.size() > 160 || voice.token.size() > 512) return false;
     const auto dir = apps_data_dir() + "/terminal";
-    ::mkdir(dir.c_str(), 0700);
-    const std::string json = "{\n  \"enabled\": " + std::string(voice.enabled ? "true" : "false") +
-        ",\n  \"include_context\": " + (voice.include_context ? "true" : "false") +
-        ",\n  \"live_preview\": " + (voice.live_preview ? "true" : "false") +
-        ",\n  \"use_moonpilot\": " + (voice.use_moonpilot ? "true" : "false") +
-        ",\n  \"endpoint\": \"" + json_escape(voice.endpoint) +
-        "\",\n  \"model\": \"" + json_escape(voice.model) +
-        "\",\n  \"token\": \"" + json_escape(voice.token) + "\"\n}\n";
-    return write_file(voice_settings_file(), json);
+    if (::mkdir(dir.c_str(), 0700) != 0 && errno != EEXIST) return false;
+    std::string error;
+    if (terminal::save_voice_config(voice_settings_file(), voice, error)) return true;
+    load_voice_settings();  // reflect the last persisted settings after failure
+    return false;
 }
 
 std::string sshd_data_dir() { return apps_data_dir() + "/terminal/dropbear"; }
@@ -1282,7 +1209,7 @@ std::vector<Item> ssh_page() {
     v.push_back(action("autostart", "开机自动启动", auto_start ? "已开启" : "未开启", [auto_start] {
                            set_sshd_auto_start(!auto_start);
                        }));
-    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。首次启动若未设置密码会使用默认密码 c1max；建议进入此页后立即修改，密码只保存哈希。"));
+    v.push_back(note("tip", "公钥文件：/storage/terminal/dropbear/authorized_keys。先设置密码或导入公钥后再启动；没有统一默认密码，只保存密码哈希。"));
     return v;
 }
 
@@ -1891,7 +1818,7 @@ void move_focus(int dir) {
     }
     for (int i = focus + dir; i >= 0 && i < static_cast<int>(items.size()); i += dir) {
         if (!items[i].focusable()) continue;
-        if (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword) {
+        if (sheet == Sheet::Password || sheet == Sheet::Hidden || sheet == Sheet::SshPassword || sheet == Sheet::Voice) {
             if (items[i].key == "in:pw") input_target = 0;
             else if (items[i].key == "in:ssid") input_target = 1;
             else if (items[i].key == "in:ssh-password") input_target = 2;
@@ -2057,8 +1984,9 @@ void create_ui() {
         auto *b = lv_obj_create(side);
         side_items[i] = b;
         lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_set_pos(b, 8, 48 + i * 41);
-        lv_obj_set_size(b, 180, 38);
+        const int step = (340 - 48 - 4) / kSections;
+        lv_obj_set_pos(b, 8, 48 + i * step);
+        lv_obj_set_size(b, 180, step - 3);
         lv_obj_set_style_radius(b, 8, 0);
         lv_obj_set_style_border_width(b, 0, 0);
         lv_obj_set_style_pad_all(b, 0, 0);

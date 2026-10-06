@@ -49,7 +49,7 @@ std::string Terminal::context(size_t max_bytes) const {
         for (int col = 0; col < cols_; ++col) {
             const auto cell_value = cell(row, col);
             if (cell_value.chars[0] == UINT32_MAX) continue;
-            const auto text = utf8(cell_value);
+            const auto text = cell_value.attrs.conceal ? std::string(cell_value.width == 2 ? 2 : 1, ' ') : utf8(cell_value);
             if (text.empty() || line.size() + text.size() > max_bytes) break;
             line += text;
         }

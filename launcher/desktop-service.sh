@@ -95,11 +95,6 @@ fi
 SSHD="$C1_APPS_ROOT/terminal/assets/bin/sshd"
 if [ -x "$SSHD" ]; then "$SSHD" boot >>"$STATE/sshd.log" 2>&1 & fi
 
-# Keep deep suspend inhibited only while an SSH session is actually attached.
-# The helper owns a per-client PowerManager lock and releases it on exit.
-POWER_GUARD="$C1_APPS_ROOT/shared/c1max-power-guard"
-if [ -x "$POWER_GUARD" ]; then "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 & fi
-
 rm -f "$HEARTBEAT"
 log "Starting custom desktop release=$(readlink "$BASE/current" 2>/dev/null || echo unknown)"
 export C1L_DEFAULT_DESKTOP=1

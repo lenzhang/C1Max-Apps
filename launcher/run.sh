@@ -78,6 +78,8 @@ CHILD=
 CHILD_STAMP=
 VOLUME=
 VOLUME_STAMP=
+POWER_GUARD_PID=
+POWER_GUARD_STAMP=
 AUDIO="$LOCK/alsa.state"
 cleanup() {
     status=$?
@@ -124,6 +126,21 @@ cleanup() {
         fi
         wait "$VOLUME" 2>/dev/null
     fi
+    if same_process "$POWER_GUARD_PID" "$POWER_GUARD_STAMP"; then
+        kill -TERM "$POWER_GUARD_PID" 2>/dev/null
+        n=0
+        while same_process "$POWER_GUARD_PID" "$POWER_GUARD_STAMP" && [ "$n" -lt 20 ]; do
+            sleep 0.1; n=$((n+1))
+        done
+        if same_process "$POWER_GUARD_PID" "$POWER_GUARD_STAMP"; then
+            kill -KILL "$POWER_GUARD_PID" 2>/dev/null
+            n=0
+            while same_process "$POWER_GUARD_PID" "$POWER_GUARD_STAMP" && [ "$n" -lt 20 ]; do
+                sleep 0.1; n=$((n+1))
+            done
+        fi
+        wait "$POWER_GUARD_PID" 2>/dev/null
+    fi
     if [ -f "$AUDIO" ]; then
         alsactl -f "$AUDIO" restore 0 >/dev/null 2>&1 || log 'Could not restore the saved mixer state'
     fi
@@ -162,6 +179,16 @@ export C1_APPS_DATA="$BASE/data"
 export C1L_CONFIG="${C1L_CONFIG:-$C1_APPS_ROOT/launcher/apps.txt}"
 [ -x "$C1_APPS_ROOT/launcher/c1max-launcher" ] || { log 'Launcher executable is missing'; exit 1; }
 [ -x "$C1_APPS_ROOT/shared/c1max-volume" ] || { log 'Volume helper executable is missing'; exit 1; }
+
+# Keep the suspend guard tied to this supervisor. This covers both the normal
+# init-triggered desktop and manual/SSH recovery starts; the guard's parent
+# death signal releases any PowerManager lock when the launcher exits.
+POWER_GUARD="$C1_APPS_ROOT/shared/c1max-power-guard"
+if [ -x "$POWER_GUARD" ]; then
+    "$POWER_GUARD" >>"$STATE/power-guard.log" 2>&1 &
+    POWER_GUARD_PID=$!
+    POWER_GUARD_STAMP=$(process_stamp "$POWER_GUARD_PID" 2>/dev/null || true)
+fi
 
 if [ ! -f "$AUDIO" ]; then
     if alsactl -f "$AUDIO.tmp" store 0 >/dev/null 2>&1; then
